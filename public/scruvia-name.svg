@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="60" viewBox="0 0 200 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0070f3" />
+      <stop offset="100%" stop-color="#00c8ff" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Simpler text implementation that will work in most browsers -->
+  <g fill="url(#gradient)" font-family="Arial, sans-serif" font-weight="bold">
+    <text x="10" y="40" font-size="40">SCRUVIA</text>
+  </g>
+</svg>

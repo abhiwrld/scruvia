@@ -1,36 +1,145 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scruvia AI - Tax and Finance Assistant
+
+Scruvia AI is an intelligent assistant for taxation and financial analytics based on Indian tax laws.
+
+## Features
+
+- Chat with AI about tax laws and regulations
+- Save and manage conversation history
+- Web search integration to provide real-time information
+- Authentication and user management with Supabase
+- Different subscription plans (Free, Plus, Pro, Team)
+
+## Tech Stack
+
+- Next.js 14 (App Router)
+- TypeScript
+- Tailwind CSS
+- Supabase (Authentication & Database)
+- Perplexity API
+- Razorpay (Payment Gateway)
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+ and npm/yarn
+- Supabase account and project
+- Perplexity API key
+- Razorpay account (for payment processing)
+
+### Environment Setup
+
+1. Clone the repository
+2. Create a `.env.local` file with the following variables:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_PERPLEXITY_API_KEY=your_perplexity_api_key
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Supabase Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Create a new Supabase project at https://supabase.com
+2. Go to the SQL Editor in your Supabase dashboard
+3. Execute the SQL in `supabase/schema.sql` to set up the database schema
+4. Execute the SQL in `supabase/payments_schema.sql` to set up the payment-related tables
+5. Enable Email authentication in Authentication > Providers
+6. Copy your Supabase URL and anon key to the `.env.local` file
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Razorpay Setup
 
-## Learn More
+1. Create a Razorpay account at https://razorpay.com
+2. Go to the Dashboard > Settings > API Keys to get your Key ID and Key Secret
+3. Add these credentials to the `.env.local` file
+4. Test Mode is enabled by default on Razorpay Test Dashboard
+5. In production, update the Webhook settings in the Razorpay Dashboard to receive payment notifications
 
-To learn more about Next.js, take a look at the following resources:
+### Installation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The application will be available at http://localhost:3000.
 
-## Deploy on Vercel
+## Database Schema
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Profiles Table
+Extends the auth.users table with additional user information:
+- id (UUID, references auth.users)
+- name (TEXT)
+- avatar_url (TEXT)
+- plan (TEXT, default 'free')
+- questionsUsed (INTEGER)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Chats Table
+Stores chat history:
+- id (UUID)
+- title (TEXT)
+- user_id (UUID, references auth.users)
+- messages (JSONB)
+- model (TEXT)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+
+### Subscriptions Table
+Tracks user subscription information:
+- id (UUID)
+- user_id (UUID, references auth.users)
+- plan (TEXT)
+- status (TEXT)
+- current_period_start (TIMESTAMP)
+- current_period_end (TIMESTAMP)
+- cancel_at (TIMESTAMP)
+- canceled_at (TIMESTAMP)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+- payment_provider (TEXT)
+- payment_id (TEXT)
+
+### Usage Logs Table
+Tracks API usage:
+- id (UUID)
+- user_id (UUID, references auth.users)
+- action (TEXT)
+- model (TEXT)
+- tokens_used (INTEGER)
+- created_at (TIMESTAMP)
+
+### Payments Table
+Tracks completed payments:
+- id (SERIAL)
+- user_id (UUID, references auth.users)
+- payment_id (TEXT)
+- order_id (TEXT)
+- amount (BIGINT)
+- currency (TEXT)
+- plan (TEXT)
+- status (TEXT)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+
+### Payment Orders Table
+Tracks payment orders:
+- id (SERIAL)
+- order_id (TEXT)
+- user_id (UUID, references auth.users)
+- amount (BIGINT)
+- currency (TEXT)
+- plan (TEXT)
+- status (TEXT)
+- payment_id (TEXT)
+- created_at (TIMESTAMP)
+- updated_at (TIMESTAMP)
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
