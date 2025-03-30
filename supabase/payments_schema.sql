@@ -58,11 +58,11 @@ CREATE POLICY "Users can view their own payments"
   FOR SELECT
   USING (auth.uid() = user_id);
 
--- Only service role can insert payments (via API)
+-- Only service role can insert/update payments (via API)
 CREATE POLICY "Service role can insert payments"
   ON public.payments
   FOR INSERT
-  WITH CHECK (auth.uid() IS NOT NULL);
+  USING (auth.uid() IS NOT NULL);
 
 -- Allow service role to update payment records
 CREATE POLICY "Service role can update payments"

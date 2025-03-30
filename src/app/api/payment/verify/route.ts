@@ -2,28 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabase } from '@/utils/supabase';
 
-// Configure the runtime for Node.js on Vercel
-export const config = {
-  runtime: 'nodejs',
-};
-
-// Check for environment variables
-const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
-
-if (!razorpayKeySecret) {
-  console.error('Missing Razorpay secret key for payment verification');
-}
-
 export async function POST(request: NextRequest) {
   try {
-    // Check if Razorpay secret is configured
-    if (!razorpayKeySecret) {
-      return NextResponse.json(
-        { success: false, error: 'Payment verification not configured' },
-        { status: 500 }
-      );
-    }
-
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -34,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     // Validate payment signature
     const generatedSignature = crypto
-      .createHmac('sha256', razorpayKeySecret)
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest('hex');
 
@@ -109,7 +89,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Payment verification error:', error);
     return NextResponse.json(
-      { success: false, error: 'Payment verification failed', details: String(error) },
+      { success: false, error: 'Payment verification failed' },
       { status: 500 }
     );
   }

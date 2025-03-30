@@ -18,7 +18,6 @@ export default function PricingPage() {
   const [pendingPlanUpgrade, setPendingPlanUpgrade] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   const router = useRouter();
   
   useEffect(() => {
@@ -43,9 +42,6 @@ export default function PricingPage() {
   }, []);
 
   const handleUpgrade = async (plan: string) => {
-    // Reset payment error
-    setPaymentError(null);
-    
     // If the plan is free, just downgrade
     if (plan === 'free') {
       await completeUpgrade(plan);
@@ -128,7 +124,7 @@ export default function PricingPage() {
             setShowSuccess(true);
           } catch (err) {
             console.error('Payment verification error:', err);
-            setPaymentError('Payment verification failed. Please contact support.');
+            alert('Payment verification failed. Please contact support.');
           } finally {
             setPaymentLoading(false);
           }
@@ -141,24 +137,15 @@ export default function PricingPage() {
         theme: {
           color: '#9c6bff',
         },
-        modal: {
-          ondismiss: function() {
-            setPaymentLoading(false);
-          }
-        }
       };
       
       // Create and open Razorpay checkout
       const razorpay = new (window as any).Razorpay(options);
-      razorpay.on('payment.failed', function(response: any) {
-        setPaymentError(`Payment failed: ${response.error.description}`);
-        setPaymentLoading(false);
-      });
       razorpay.open();
       
-    } catch (err: any) {
+    } catch (err) {
       console.error('Payment initialization error:', err);
-      setPaymentError(err.message || 'Payment initialization failed. Please try again later.');
+      alert('Payment initialization failed. Please try again later.');
       setPaymentLoading(false);
     }
   };
@@ -223,29 +210,6 @@ export default function PricingPage() {
           <span>Back to Chat</span>
         </Link>
       </div>
-      
-      {/* Error message */}
-      {paymentError && (
-        <div className="fixed inset-0 flex items-center justify-center z-50">
-          <div className="bg-gray-900/70 absolute inset-0 backdrop-blur-sm" onClick={() => setPaymentError(null)}></div>
-          <div className="bg-gray-800 p-6 rounded-lg shadow-xl relative z-10 max-w-md w-full mx-4">
-            <div className="text-red-400 mb-4">
-              <svg className="w-8 h-8 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <h3 className="text-xl font-medium text-center">Payment Error</h3>
-            </div>
-            <p className="text-gray-300 text-center mb-6">{paymentError}</p>
-            <button 
-              onClick={() => setPaymentError(null)}
-              className="w-full py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md transition-colors"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-      
       {showSuccess && (
         <SuccessMessage
           message={successMessage}
