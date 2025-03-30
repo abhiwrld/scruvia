@@ -105,7 +105,7 @@ The model must try to give the answer in maximum words possible.
 
 // Function to get the API token from environment variables
 const getApiToken = () => {
-  const token = process.env.NEXT_PUBLIC_PERPLEXITY_API_KEY;
+  const token = process.env.PERPLEXITY_API_KEY;
   
   if (!token) {
     console.error('Perplexity API key not found in environment variables');

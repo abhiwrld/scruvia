@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prebuild": "node -r dotenv/config scripts/verify-env.js",
     "start": "next start",
     "lint": "next lint",
-    "setup-supabase": "node scripts/setup-supabase.js"
+    "setup-supabase": "node scripts/setup-supabase.js",
+    "verify-env": "node -r dotenv/config scripts/verify-env.js"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
