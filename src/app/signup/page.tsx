@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { detectLocalStorageClearing } from '@/utils/supabase';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
@@ -16,6 +17,13 @@ export default function SignupPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const router = useRouter();
   const { user, signUp, isLoading } = useAuth();
+
+  useEffect(() => {
+    // Set up protection against localStorage clearing
+    if (typeof window !== 'undefined') {
+      detectLocalStorageClearing();
+    }
+  }, []);
 
   useEffect(() => {
     // Redirect if already logged in

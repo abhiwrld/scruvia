@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase, getCurrentUser, getUserProfile, getUserPlan, signInWithEmail } from '@/utils/supabase';
+import { useRouter } from 'next/navigation';
 
 type AuthContextType = {
   user: User | null;
@@ -21,6 +22,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any | null>(null);
   const [plan, setPlan] = useState<'free' | 'plus' | 'pro' | 'team'>('free');
   const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     let mounted = true;
@@ -79,10 +81,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // If this is a SIGNED_IN event, force redirect to chat page
           if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
             console.log('SIGNED_IN event detected, redirecting to chat');
-            // Use router push for more reliable navigation
+            
+            // Wait for a short period to ensure everything is properly set up
             setTimeout(() => {
-              window.location.href = '/chat';
-            }, 500);
+              // First try using the router
+              try {
+                router.push('/chat');
+              } catch (e) {
+                console.warn('Router push failed, using window.location.href instead', e);
+                // Fall back to direct location change if router fails
+                window.location.href = '/chat';
+              }
+            }, 300);
           }
         } else if (mounted && event === 'SIGNED_OUT') {
           console.log('User signed out in auth state change');
@@ -107,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription?.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   const loadUserProfile = async (userId: string) => {
     try {

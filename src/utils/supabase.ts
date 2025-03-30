@@ -256,8 +256,39 @@ export async function signInWithEmail(email: string, password: string, rememberM
   try {
     console.log('Signing in with email', { email, rememberMe });
     
-    // Use the global supabase client for most reliability
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // Check if we're in a browser that might have localStorage issues (like Chrome with extensions)
+    let detectedClearingIssue = false;
+    if (typeof window !== 'undefined') {
+      // Try to store a test value in localStorage
+      try {
+        localStorage.setItem('supabase-test', 'test');
+        const testValue = localStorage.getItem('supabase-test');
+        localStorage.removeItem('supabase-test');
+        
+        if (!testValue) {
+          console.warn('Detected localStorage issue - something may be clearing storage');
+          detectedClearingIssue = true;
+        }
+      } catch (e) {
+        console.warn('localStorage test failed:', e);
+        detectedClearingIssue = true;
+      }
+    }
+    
+    // Create client with specific persistence options
+    const authOptions = {
+      auth: {
+        persistSession: rememberMe,
+        // If we detect localStorage issues, store in memory only
+        storage: detectedClearingIssue ? undefined : localStorage
+      }
+    };
+    
+    // Create a custom client for this login attempt
+    const customClient = createClient(supabaseUrl, supabaseAnonKey, authOptions);
+    
+    // Use the custom client for sign in
+    const { data, error } = await customClient.auth.signInWithPassword({
       email,
       password,
     });
@@ -265,6 +296,15 @@ export async function signInWithEmail(email: string, password: string, rememberM
     if (error) {
       logSupabaseError('Error signing in', error);
       throw error;
+    }
+
+    // Sync the session with the main client
+    if (data.session) {
+      // Set the session on the main client
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      });
     }
 
     console.log('Sign in successful');
@@ -498,4 +538,48 @@ export async function ensureSessionRestored() {
     console.error('Error in ensureSessionRestored:', error);
     return false;
   }
+}
+
+// Add a function to detect and prevent localStorage clearing
+export function detectLocalStorageClearing() {
+  if (typeof window === 'undefined') return;
+  
+  console.log('Setting up localStorage protection');
+  
+  // Track which extension might be clearing storage
+  const originalClear = localStorage.clear;
+  const originalRemoveItem = localStorage.removeItem;
+  
+  localStorage.clear = function() {
+    console.warn('localStorage.clear detected - this may interfere with authentication');
+    console.trace('Storage clear stack trace');
+    return originalClear.call(localStorage);
+  };
+  
+  localStorage.removeItem = function(key: string) {
+    console.log('Cleaning up localStorage item:', key);
+    return originalRemoveItem.call(localStorage, key);
+  };
+  
+  // Set up observer to watch for localStorage changes
+  let cleanupCounter = 0;
+  
+  const observer = new MutationObserver(() => {
+    // Check if our auth token is still there
+    const storageKey = 'sb-' + supabaseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') + '-auth-token';
+    const hasAuthToken = localStorage.getItem(storageKey);
+    
+    if (!hasAuthToken) {
+      cleanupCounter++;
+      console.log(`Cleaned up ${cleanupCounter} localStorage items`);
+      
+      // If we've detected multiple cleanups, log a warning
+      if (cleanupCounter > 2) {
+        console.warn('Multiple localStorage cleanups detected. This may be causing authentication issues.');
+      }
+    }
+  });
+  
+  // Start observing
+  observer.observe(document, { childList: true, subtree: true });
 } 

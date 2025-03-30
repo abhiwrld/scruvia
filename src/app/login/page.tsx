@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import { detectLocalStorageClearing } from '@/utils/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -16,8 +17,16 @@ export default function LoginPage() {
   const { user, signIn, isLoading } = useAuth();
 
   useEffect(() => {
+    // Set up protection against localStorage clearing
+    if (typeof window !== 'undefined') {
+      detectLocalStorageClearing();
+    }
+  }, []);
+
+  useEffect(() => {
     // Redirect if already logged in
     if (user) {
+      console.log('User detected, redirecting to chat');
       router.push('/chat');
     }
   }, [user, router]);
@@ -34,8 +43,14 @@ export default function LoginPage() {
     }
 
     try {
+      // Create a local variable to prevent race conditions
+      const email_val = email;
+      const password_val = password;
+      const remember_val = rememberMe;
+
       // Sign in with Supabase
-      await signIn(email, password, rememberMe);
+      console.log('Attempting sign in, remember me:', remember_val);
+      await signIn(email_val, password_val, remember_val);
       console.log('Login successful - waiting for auth state change to redirect');
     } catch (err: any) {
       console.error('Login error:', err);
