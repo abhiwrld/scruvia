@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SuccessMessage from '../components/SuccessMessage';
 import PhoneVerification from '../components/PhoneVerification';
-import { getCurrentUser } from '@/utils/supabase';
-import Script from 'next/script';
 
 export default function PricingPage() {
   const [selectedTab, setSelectedTab] = useState('personal');
@@ -16,137 +14,29 @@ export default function PricingPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [showPhoneVerification, setShowPhoneVerification] = useState(false);
   const [pendingPlanUpgrade, setPendingPlanUpgrade] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [paymentLoading, setPaymentLoading] = useState(false);
   const router = useRouter();
   
   useEffect(() => {
-    async function fetchUser() {
-      // Get current user from Supabase
-      const user = await getCurrentUser();
-      if (user?.id) {
-        setUserId(user.id);
-      }
-      
-      // Get current plan from localStorage
-      const userLocal = localStorage.getItem('user');
-      if (userLocal) {
-        const userData = JSON.parse(userLocal);
-        if (userData.plan) {
-          setCurrentPlan(userData.plan);
-        }
+    // Get current plan from localStorage
+    const user = localStorage.getItem('user');
+    if (user) {
+      const userData = JSON.parse(user);
+      if (userData.plan) {
+        setCurrentPlan(userData.plan);
       }
     }
-    
-    fetchUser();
   }, []);
 
   const handleUpgrade = async (plan: string) => {
-    // If the plan is free, just downgrade
-    if (plan === 'free') {
-      await completeUpgrade(plan);
-      return;
-    }
-    
-    setPaymentLoading(true);
+    setLoading(true);
     
     try {
-      if (!userId) {
-        throw new Error('User not logged in');
-      }
-      
-      // Create a payment order on the server
-      const response = await fetch('/api/payment', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          plan,
-          userId,
-        }),
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create payment order');
-      }
-      
-      // Initialize Razorpay
-      const options = {
-        key: data.keyId,
-        amount: data.amount,
-        currency: data.currency,
-        name: 'Scruvia AI',
-        description: `Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan`,
-        order_id: data.orderId,
-        handler: async function (response: any) {
-          try {
-            // Verify payment with the server
-            const verifyResponse = await fetch('/api/payment/verify', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature,
-                userId,
-                plan,
-              }),
-            });
-            
-            const verifyData = await verifyResponse.json();
-            
-            if (!verifyResponse.ok) {
-              throw new Error(verifyData.error || 'Payment verification failed');
-            }
-            
-            // Update local storage
-            const user = localStorage.getItem('user');
-            if (user) {
-              const userData = JSON.parse(user);
-              userData.plan = plan;
-              localStorage.setItem('user', JSON.stringify(userData));
-            }
-            
-            // Show success message
-            const planNames = {
-              free: 'Free',
-              plus: 'Plus',
-              pro: 'Pro',
-              team: 'Team'
-            };
-            
-            setSuccessMessage(`Successfully upgraded to ${planNames[plan as keyof typeof planNames]} plan! You will be redirected to the chat shortly.`);
-            setShowSuccess(true);
-          } catch (err) {
-            console.error('Payment verification error:', err);
-            alert('Payment verification failed. Please contact support.');
-          } finally {
-            setPaymentLoading(false);
-          }
-        },
-        prefill: {
-          name: '',
-          email: '',
-          contact: '',
-        },
-        theme: {
-          color: '#9c6bff',
-        },
-      };
-      
-      // Create and open Razorpay checkout
-      const razorpay = new (window as any).Razorpay(options);
-      razorpay.open();
-      
+      // For demo purposes, we'll skip phone verification
+      // In a real app, you would implement proper phone verification
+      await completeUpgrade(plan);
     } catch (err) {
-      console.error('Payment initialization error:', err);
-      alert('Payment initialization failed. Please try again later.');
-      setPaymentLoading(false);
+      console.error('Error updating plan:', err);
+      setLoading(false);
     }
   };
   
@@ -170,13 +60,12 @@ export default function PricingPage() {
         team: 'Team'
       };
       
-      setSuccessMessage(`Successfully downgraded to ${planNames[plan as keyof typeof planNames]} plan! You will be redirected to the chat shortly.`);
+      setSuccessMessage(`Successfully upgraded to ${planNames[plan as keyof typeof planNames]} plan! You will be redirected to the chat shortly.`);
       setShowSuccess(true);
       
+      // Don't redirect immediately, the success message component will handle this
     } catch (err) {
       console.error('Error updating plan:', err);
-      alert('Failed to update plan. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -198,9 +87,6 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-[#0c1220] flex flex-col py-12 px-6 md:px-12 relative overflow-hidden">
-      {/* Razorpay script */}
-      <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-      
       {/* Back to chat button */}
       <div className="absolute top-4 left-4 z-10">
         <Link href="/chat" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
@@ -277,11 +163,11 @@ export default function PricingPage() {
                   Get started with Scruvia AI and experience the basics of AI-powered tax assistance.
                 </p>
                 <button
-                  disabled={currentPlan === 'free' || loading || paymentLoading}
+                  disabled={currentPlan === 'free' || loading}
                   onClick={() => handleUpgrade('free')}
                   className="w-full py-2 px-4 border border-gray-600 rounded-md text-gray-300 hover:bg-gray-700/50 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
                 >
-                  {paymentLoading ? (
+                  {loading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -326,11 +212,11 @@ export default function PricingPage() {
                   Ideal for individuals who need more comprehensive tax and financial assistance.
                 </p>
                 <button
-                  disabled={currentPlan === 'plus' || loading || paymentLoading}
+                  disabled={currentPlan === 'plus' || loading}
                   onClick={() => handleUpgrade('plus')}
                   className="w-full py-2 px-4 bg-gradient-to-r from-[#9c6bff]/80 to-[#00c8ff]/80 hover:from-[#9c6bff] hover:to-[#00c8ff] rounded-md text-white transition-all shadow-md shadow-[#9c6bff]/20 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
                 >
-                  {paymentLoading ? (
+                  {loading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -384,11 +270,11 @@ export default function PricingPage() {
                   Advanced AI-powered tax and financial assistance for professionals.
                 </p>
                 <button
-                  disabled={currentPlan === 'pro' || loading || paymentLoading}
+                  disabled={currentPlan === 'pro' || loading}
                   onClick={() => handleUpgrade('pro')}
                   className="w-full py-2 px-4 bg-gradient-to-r from-[#9c6bff] to-[#00c8ff] hover:opacity-90 rounded-md text-white transition-all shadow-md shadow-[#9c6bff]/20 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
                 >
-                  {paymentLoading ? (
+                  {loading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -447,11 +333,11 @@ export default function PricingPage() {
                   Supercharge your team's work with a secure, collaborative workspace for tax and financial management.
                 </p>
                 <button
-                  disabled={currentPlan === 'team' || loading || paymentLoading}
+                  disabled={currentPlan === 'team' || loading}
                   onClick={() => handleUpgrade('team')}
                   className="w-full py-3 px-4 bg-gradient-to-r from-[#9c6bff] to-[#00c8ff] hover:opacity-90 rounded-md text-white transition-all shadow-md shadow-[#9c6bff]/20 text-lg font-medium disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
                 >
-                  {paymentLoading ? (
+                  {loading ? (
                     <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

@@ -17,7 +17,6 @@ Scruvia AI is an intelligent assistant for taxation and financial analytics base
 - Tailwind CSS
 - Supabase (Authentication & Database)
 - Perplexity API
-- Razorpay (Payment Gateway)
 
 ## Getting Started
 
@@ -26,7 +25,6 @@ Scruvia AI is an intelligent assistant for taxation and financial analytics base
 - Node.js 18+ and npm/yarn
 - Supabase account and project
 - Perplexity API key
-- Razorpay account (for payment processing)
 
 ### Environment Setup
 
@@ -38,8 +36,6 @@ NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_PERPLEXITY_API_KEY=your_perplexity_api_key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-RAZORPAY_KEY_ID=your_razorpay_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
 ### Supabase Setup
@@ -47,17 +43,8 @@ RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 1. Create a new Supabase project at https://supabase.com
 2. Go to the SQL Editor in your Supabase dashboard
 3. Execute the SQL in `supabase/schema.sql` to set up the database schema
-4. Execute the SQL in `supabase/payments_schema.sql` to set up the payment-related tables
-5. Enable Email authentication in Authentication > Providers
-6. Copy your Supabase URL and anon key to the `.env.local` file
-
-### Razorpay Setup
-
-1. Create a Razorpay account at https://razorpay.com
-2. Go to the Dashboard > Settings > API Keys to get your Key ID and Key Secret
-3. Add these credentials to the `.env.local` file
-4. Test Mode is enabled by default on Razorpay Test Dashboard
-5. In production, update the Webhook settings in the Razorpay Dashboard to receive payment notifications
+4. Enable Email authentication in Authentication > Providers
+5. Copy your Supabase URL and anon key to the `.env.local` file
 
 ### Installation
 
@@ -113,32 +100,6 @@ Tracks API usage:
 - model (TEXT)
 - tokens_used (INTEGER)
 - created_at (TIMESTAMP)
-
-### Payments Table
-Tracks completed payments:
-- id (SERIAL)
-- user_id (UUID, references auth.users)
-- payment_id (TEXT)
-- order_id (TEXT)
-- amount (BIGINT)
-- currency (TEXT)
-- plan (TEXT)
-- status (TEXT)
-- created_at (TIMESTAMP)
-- updated_at (TIMESTAMP)
-
-### Payment Orders Table
-Tracks payment orders:
-- id (SERIAL)
-- order_id (TEXT)
-- user_id (UUID, references auth.users)
-- amount (BIGINT)
-- currency (TEXT)
-- plan (TEXT)
-- status (TEXT)
-- payment_id (TEXT)
-- created_at (TIMESTAMP)
-- updated_at (TIMESTAMP)
 
 ## License
 
