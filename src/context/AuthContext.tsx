@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
-import { supabase, getCurrentUser, getUserProfile, getUserPlan } from '@/utils/supabase';
+import { supabase, getCurrentUser, getUserProfile, getUserPlan, signInWithEmail } from '@/utils/supabase';
 
 type AuthContextType = {
   user: User | null;
   profile: any | null;
   isLoading: boolean;
   plan: 'free' | 'plus' | 'pro' | 'team';
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -23,37 +23,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      try {
-        if (session && session.user) {
-          setUser(session.user);
-          await loadUserProfile(session.user.id);
-        } else {
-          setUser(null);
-          setProfile(null);
-          setPlan('free');
-        }
-      } catch (error) {
-        console.error('Error in auth state change handler:', error);
-        // Don't reset user here as it might be a temporary error
-      } finally {
-        setIsLoading(false);
-      }
-    });
+    let mounted = true;
+    setIsLoading(true);
 
     // Check for existing session on load
     const checkUser = async () => {
       try {
         const currentUser = await getCurrentUser();
-        if (currentUser) {
+        if (currentUser && mounted) {
           console.log('Current user found:', currentUser.email);
           setUser(currentUser);
           await loadUserProfile(currentUser.id);
-        } else {
+        } else if (mounted) {
           console.log('No current user found');
           // Reset state when no user is found
           setUser(null);
@@ -63,21 +44,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         console.error('Error checking user:', error);
         // Reset state on error to prevent showing stale data
-        setUser(null);
-        setProfile(null);
-        setPlan('free');
+        if (mounted) {
+          setUser(null);
+          setProfile(null);
+          setPlan('free');
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
+
+    // Set up auth state listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event);
+      try {
+        if (session && session.user && mounted) {
+          console.log('Session user found in auth state change');
+          setUser(session.user);
+          await loadUserProfile(session.user.id);
+          
+          // If this is a SIGNED_IN event, force redirect to chat page
+          if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
+            console.log('SIGNED_IN event detected, forcing redirect to chat');
+            window.location.href = `${window.location.origin}/chat`;
+          }
+        } else if (mounted && event === 'SIGNED_OUT') {
+          console.log('User signed out in auth state change');
+          setUser(null);
+          setProfile(null);
+          setPlan('free');
+        }
+      } catch (error) {
+        console.error('Error in auth state change handler:', error);
+        // Don't reset user here as it might be a temporary error
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    });
 
     // Initialize session
     checkUser();
 
     return () => {
+      mounted = false;
       subscription?.unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    // Check if we're on the login page but already have a user
+    if (user && typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      if (currentPath === '/login' || currentPath === '/signup') {
+        console.log('Detected signed-in user on login/signup page, redirecting to chat');
+        // Force redirect to chat
+        window.location.href = `${window.location.origin}/chat`;
+      }
+    }
+  }, [user]);
 
   const loadUserProfile = async (userId: string) => {
     try {
@@ -110,19 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email, 
-        password 
-      });
+      const { user } = await signInWithEmail(email, password, rememberMe);
       
-      if (error) throw error;
-      
-      if (data.user) {
-        setUser(data.user);
-        await loadUserProfile(data.user.id);
+      if (user) {
+        setUser(user);
+        await loadUserProfile(user.id);
       }
     } catch (error) {
       console.error('Error signing in:', error);

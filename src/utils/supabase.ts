@@ -252,9 +252,16 @@ export async function updateUserProfile(userId: string, updates: any) {
 }
 
 // Authentication functions
-export async function signInWithEmail(email: string, password: string) {
+export async function signInWithEmail(email: string, password: string, rememberMe: boolean = true) {
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // Create a client with the specified persistSession setting
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: rememberMe
+      }
+    });
+
+    const { data, error } = await authClient.auth.signInWithPassword({
       email,
       password,
     });
@@ -262,6 +269,15 @@ export async function signInWithEmail(email: string, password: string) {
     if (error) {
       logSupabaseError('Error signing in', error);
       throw error;
+    }
+
+    // Important: Sync the session with the main supabase client to ensure
+    // consistent state across the app
+    if (data.session) {
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token
+      });
     }
 
     return data;
@@ -373,6 +389,125 @@ export async function incrementQuestionCount(userId: string) {
     return true;
   } catch (err) {
     console.error('Exception in incrementQuestionCount:', err);
+    return false;
+  }
+}
+
+// Add a function to check if a user is authenticated with better handling for different environments
+export async function isAuthenticated() {
+  try {
+    // First check if we have a pending login
+    const isPending = typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true';
+    if (isPending) {
+      console.log('Found pending login flag');
+      return true; // Consider user authenticated if a login is pending
+    }
+    
+    // Then try to get the user
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    if (error) {
+      if (error.name === 'AuthSessionMissingError') {
+        console.log('No active session found');
+        return false;
+      }
+      logSupabaseError('Error checking authentication', error);
+      return false;
+    }
+    
+    return !!user;
+  } catch (error: any) {
+    console.error('Exception in isAuthenticated:', error);
+    return false;
+  }
+}
+
+// Add a debug function for diagnosing authentication issues
+export async function debugAuthState() {
+  try {
+    console.log('=== DEBUG AUTH STATE ===');
+    
+    // Check localStorage for pending login
+    const pendingLogin = typeof window !== 'undefined' && localStorage.getItem('userLoginPending');
+    console.log('Pending login flag:', pendingLogin);
+    
+    // Check current session
+    const { data: { session } } = await supabase.auth.getSession();
+    console.log('Session exists:', !!session);
+    if (session) {
+      console.log('Session expires at:', new Date(session.expires_at! * 1000).toISOString());
+      console.log('Session expired:', session.expires_at! * 1000 < Date.now());
+    }
+    
+    // Check current user
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('User exists:', !!user);
+    if (user) {
+      console.log('User ID:', user.id);
+      console.log('User email:', user.email);
+    }
+    
+    // Check localStorage for session
+    if (typeof window !== 'undefined') {
+      const supabaseSession = localStorage.getItem('supabase.auth.token');
+      console.log('Supabase session in localStorage:', !!supabaseSession);
+    }
+    
+    console.log('=== END DEBUG AUTH STATE ===');
+    
+    return {
+      pendingLogin,
+      session,
+      user,
+      hasLocalSession: typeof window !== 'undefined' && !!localStorage.getItem('supabase.auth.token')
+    };
+  } catch (error) {
+    console.error('Error in debugAuthState:', error);
+    return { error };
+  }
+}
+
+// Add a function to force session restoration when needed
+export async function ensureSessionRestored() {
+  try {
+    // Check if we have a pending login flag
+    if (typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true') {
+      console.log('Attempting to forcibly restore session from local storage');
+      
+      // Get the session from localStorage
+      const storedSession = localStorage.getItem('sb-' + supabaseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') + '-auth-token');
+      
+      if (storedSession) {
+        try {
+          const session = JSON.parse(storedSession);
+          console.log('Found stored session, attempting restoration');
+          
+          // Try to restore the session
+          if (session?.access_token && session?.refresh_token) {
+            const { error } = await supabase.auth.setSession({
+              access_token: session.access_token,
+              refresh_token: session.refresh_token
+            });
+            
+            if (error) {
+              console.error('Failed to restore session:', error);
+              return false;
+            }
+            
+            console.log('Session successfully restored');
+            return true;
+          }
+        } catch (e) {
+          console.error('Error parsing stored session:', e);
+        }
+      } else {
+        console.log('No stored session found');
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error in ensureSessionRestored:', error);
     return false;
   }
 } 

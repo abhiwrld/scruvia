@@ -18,6 +18,11 @@ export default function CancellationsRefunds() {
           <p>
             This Cancellations and Refunds Policy outlines the terms and conditions for cancellations, refunds, and subscription management for Scruvia's AI-powered chatbot services for taxation and financial analytics.
           </p>
+          <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg mt-4">
+            <p className="font-medium">
+              IMPORTANT NOTICE: Once a subscription is purchased, NO REFUNDS will be provided under any circumstances. By subscribing to our services, you acknowledge and agree to this strict no-refund policy.
+            </p>
+          </div>
         </section>
         
         <section>
@@ -62,68 +67,51 @@ export default function CancellationsRefunds() {
           <h2 className="text-2xl font-semibold mb-3">5. Refund Policy</h2>
           
           <h3 className="text-xl font-medium mb-2">5.1 Standard Refund Policy</h3>
-          <p>
-            Scruvia offers a limited refund policy based on the subscription plan type:
+          <p className="font-bold text-red-600">
+            NO REFUNDS: Scruvia maintains a strict no-refund policy for all subscription plans. Once payment has been processed, no refunds will be issued under any circumstances.
           </p>
-          <ul className="list-disc ml-6 my-2">
-            <li><strong>Monthly Subscriptions:</strong> No refunds are provided for monthly subscriptions after payment has been processed.</li>
-            <li><strong>Quarterly and Annual Subscriptions:</strong> Eligible for a prorated refund within the first 14 days of a new subscription or renewal.</li>
-          </ul>
+          <p className="mt-2">
+            By subscribing to Scruvia services, you explicitly acknowledge and agree that you will not receive a refund for any subscription payments made, regardless of usage or satisfaction level.
+          </p>
           
-          <h3 className="text-xl font-medium mb-2 mt-4">5.2 Refund Eligibility</h3>
+          <h3 className="text-xl font-medium mb-2 mt-4">5.2 Exceptions</h3>
           <p>
-            Refunds may be considered in the following circumstances:
+            There are no exceptions to our no-refund policy. In cases of:
           </p>
           <ul className="list-disc ml-6 my-2">
-            <li>Technical issues that severely impact service usability, which our team cannot resolve within a reasonable timeframe.</li>
-            <li>Billing errors or duplicate charges.</li>
-            <li>Service unavailability for extended periods (exceeding 24 hours) due to our systems.</li>
-            <li>Cancellation within 48 hours of an accidental subscription renewal, provided you have not used the service after renewal.</li>
+            <li>Accidental purchases</li>
+            <li>Dissatisfaction with the service</li>
+            <li>Changes in personal circumstances</li>
+            <li>Unused subscription time</li>
           </ul>
+          <p className="mt-2">
+            No refunds will be provided. Please ensure you understand our services before subscribing.
+          </p>
           
-          <h3 className="text-xl font-medium mb-2 mt-4">5.3 Non-Refundable Items</h3>
+          <h3 className="text-xl font-medium mb-2 mt-4">5.3 Billing Errors</h3>
           <p>
-            The following are not eligible for refunds:
+            In the rare case of demonstrable billing errors (such as being charged multiple times for the same subscription period), please contact our customer support team with appropriate documentation. These cases will be reviewed individually but are not guaranteed to result in a refund.
           </p>
-          <ul className="list-disc ml-6 my-2">
-            <li>Cancellations after the first 14 days of service for quarterly or annual plans.</li>
-            <li>Unused subscription time if you cancel mid-billing cycle.</li>
-            <li>Subscriptions where terms of service have been violated.</li>
-            <li>Subscriptions that have been fully utilized (e.g., all available AI queries have been used).</li>
-          </ul>
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">6. How to Request a Refund</h2>
+          <h2 className="text-2xl font-semibold mb-3">6. How to Contact Us About Billing</h2>
           <p>
-            If you believe you are eligible for a refund, please contact our customer support team at support@scruvia.com with the following information:
+            If you have questions about your billing or subscription, please contact our customer support team at support@scruvia.com with the following information:
           </p>
           <ul className="list-disc ml-6 my-2">
             <li>Your account email address</li>
             <li>Date of purchase</li>
             <li>Subscription plan</li>
-            <li>Reason for requesting a refund</li>
-            <li>Any relevant details or documentation supporting your request</li>
+            <li>Specific billing questions</li>
           </ul>
           <p className="mt-2">
-            We aim to respond to all refund requests within 3 business days.
+            We aim to respond to all inquiries within 3 business days.
           </p>
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">7. Refund Processing</h2>
-          <p>
-            If your refund request is approved:
-          </p>
-          <ul className="list-disc ml-6 my-2">
-            <li>Refunds will be processed using the same payment method used for the original purchase.</li>
-            <li>Processing time typically takes 5-10 business days, depending on your payment provider.</li>
-            <li>For prorated refunds, the refund amount will be calculated based on the unused portion of your subscription.</li>
-          </ul>
-        </section>
-        
-        <section>
-          <h2 className="text-2xl font-semibold mb-3">8. Free Trial Conversion</h2>
+          <h2 className="text-2xl font-semibold mb-3">7. Free Trial Conversion</h2>
           <p>
             If you subscribed after a free trial period:
           </p>
@@ -135,7 +123,7 @@ export default function CancellationsRefunds() {
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">9. Plan Changes and Upgrades</h2>
+          <h2 className="text-2xl font-semibold mb-3">8. Plan Changes and Upgrades</h2>
           <p>
             When changing subscription plans:
           </p>
@@ -146,7 +134,7 @@ export default function CancellationsRefunds() {
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">10. Account Termination</h2>
+          <h2 className="text-2xl font-semibold mb-3">9. Account Termination</h2>
           <p>
             We reserve the right to terminate accounts that violate our Terms and Conditions. In such cases:
           </p>
@@ -157,7 +145,7 @@ export default function CancellationsRefunds() {
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">11. Price Changes</h2>
+          <h2 className="text-2xl font-semibold mb-3">10. Price Changes</h2>
           <p>
             We may change our subscription prices from time to time. If we do:
           </p>
@@ -169,7 +157,7 @@ export default function CancellationsRefunds() {
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">12. Changes to This Policy</h2>
+          <h2 className="text-2xl font-semibold mb-3">11. Changes to This Policy</h2>
           <p>
             We may update this Cancellations and Refunds Policy from time to time. We will notify you of any changes by posting the new policy on this page and updating the "Last Updated" date.
           </p>
@@ -179,7 +167,7 @@ export default function CancellationsRefunds() {
         </section>
         
         <section>
-          <h2 className="text-2xl font-semibold mb-3">13. Contact Us</h2>
+          <h2 className="text-2xl font-semibold mb-3">12. Contact Us</h2>
           <p>
             If you have any questions or concerns about this Cancellations and Refunds Policy, please contact us at:
           </p>

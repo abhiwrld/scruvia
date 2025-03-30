@@ -58,14 +58,73 @@ export default function ChatPage() {
   const params = useParams();
   const [selectedModel, setSelectedModel] = useState<PerplexityModel>('sonar');
 
+  // Show loading state while auth is being checked
+  const [bypassAuthLoading, setBypassAuthLoading] = useState(false);
+  
+  // Add a timeout to bypass loading screen if it takes too long
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        console.log('Bypassing auth loading state due to timeout');
+        setBypassAuthLoading(true);
+      }, 3000); // After 3 seconds, bypass the loading screen
+      
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+  
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login');
+    // Check for pending login flag in case session is still initializing
+    const userLoginPending = typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true';
+    
+    if (!isLoading) {
+      if (user) {
+        // If user is authenticated, clear the pending flag
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('userLoginPending');
+          console.log('User authenticated, cleared pending login flag');
+        }
+      } else if (!userLoginPending) {
+        // Only redirect if user is not authenticated and there's no pending login
+        console.log('No authenticated user found, redirecting to login');
+        // Use direct location change for more reliability
+        if (typeof window !== 'undefined') {
+          window.location.href = `${window.location.origin}/login`;
+        } else {
+          router.push('/login');
+        }
+      } else {
+        // If there's a pending login but no user yet, wait a bit longer
+        console.log('Login pending, waiting for session...');
+        
+        // Import the debugAuthState function dynamically to avoid circular imports
+        import('@/utils/supabase').then(({ debugAuthState }) => {
+          // Run debug to check auth state
+          debugAuthState();
+        });
+        
+        const timer = setTimeout(() => {
+          // If still no user after timeout, clear flag and redirect
+          if (!user) {
+            console.log('Session timeout, redirecting to login');
+            localStorage.removeItem('userLoginPending');
+            
+            // Use direct location change for more reliability
+            if (typeof window !== 'undefined') {
+              window.location.href = `${window.location.origin}/login`;
+            } else {
+              router.push('/login');
+            }
+          }
+        }, 5000); // Extended to 5 second grace period for production
+        
+        return () => clearTimeout(timer);
+      }
     }
   }, [isLoading, user, router]);
 
@@ -403,19 +462,48 @@ export default function ChatPage() {
   };
 
   // Show loading state while auth is being checked
-  if (isLoading) {
+  if (isLoading && !bypassAuthLoading) {
     return (
       <div className="min-h-screen bg-[#0c1220] flex flex-col justify-center items-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#00c8ff]"></div>
         <p className="mt-4 text-white">Loading...</p>
+        <button 
+          onClick={() => setBypassAuthLoading(true)}
+          className="mt-6 px-4 py-2 rounded bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+        >
+          Continue to Chat
+        </button>
       </div>
     );
   }
 
-  // Don't render anything if not authenticated
-  if (!user) {
+  // Don't render anything if not authenticated and still checking
+  if (!user && !bypassAuthLoading && !localStorage.getItem('userLoginPending')) {
     return null;
   }
+
+  // Add effect to ensure session is restored on load
+  useEffect(() => {
+    // Import and run ensureSessionRestored on component mount
+    const attemptSessionRestoration = async () => {
+      try {
+        const { ensureSessionRestored } = await import('@/utils/supabase');
+        const success = await ensureSessionRestored();
+        if (success) {
+          console.log('Session manually restored, refreshing page');
+          // Force a reload after successful session restoration
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+      }
+    };
+    
+    // Only attempt restoration if we have a pending login but no user
+    if (!user && typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true') {
+      attemptSessionRestoration();
+    }
+  }, [user]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-b from-[#0c1220] to-[#111827] text-white">
