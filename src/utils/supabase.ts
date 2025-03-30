@@ -254,14 +254,10 @@ export async function updateUserProfile(userId: string, updates: any) {
 // Authentication functions
 export async function signInWithEmail(email: string, password: string, rememberMe: boolean = true) {
   try {
-    // Create a client with the specified persistSession setting
-    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: rememberMe
-      }
-    });
-
-    const { data, error } = await authClient.auth.signInWithPassword({
+    console.log('Signing in with email', { email, rememberMe });
+    
+    // Use the global supabase client for most reliability
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -271,15 +267,7 @@ export async function signInWithEmail(email: string, password: string, rememberM
       throw error;
     }
 
-    // Important: Sync the session with the main supabase client to ensure
-    // consistent state across the app
-    if (data.session) {
-      await supabase.auth.setSession({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token
-      });
-    }
-
+    console.log('Sign in successful');
     return data;
   } catch (err) {
     console.error('Exception in signInWithEmail:', err);

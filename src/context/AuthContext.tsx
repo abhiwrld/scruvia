@@ -34,6 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('Current user found:', currentUser.email);
           setUser(currentUser);
           await loadUserProfile(currentUser.id);
+          
+          // Check if we need to redirect user to chat
+          if (typeof window !== 'undefined') {
+            const path = window.location.pathname;
+            if (path === '/' || path === '/login' || path === '/signup') {
+              console.log('User is authenticated and on auth page, redirecting to chat');
+              window.location.href = '/chat';
+            }
+          }
         } else if (mounted) {
           console.log('No current user found');
           // Reset state when no user is found
@@ -69,8 +78,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           // If this is a SIGNED_IN event, force redirect to chat page
           if (event === 'SIGNED_IN' && typeof window !== 'undefined') {
-            console.log('SIGNED_IN event detected, forcing redirect to chat');
-            window.location.href = `${window.location.origin}/chat`;
+            console.log('SIGNED_IN event detected, redirecting to chat');
+            // Use router push for more reliable navigation
+            setTimeout(() => {
+              window.location.href = '/chat';
+            }, 500);
           }
         } else if (mounted && event === 'SIGNED_OUT') {
           console.log('User signed out in auth state change');
@@ -96,18 +108,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription?.unsubscribe();
     };
   }, []);
-
-  useEffect(() => {
-    // Check if we're on the login page but already have a user
-    if (user && typeof window !== 'undefined') {
-      const currentPath = window.location.pathname;
-      if (currentPath === '/login' || currentPath === '/signup') {
-        console.log('Detected signed-in user on login/signup page, redirecting to chat');
-        // Force redirect to chat
-        window.location.href = `${window.location.origin}/chat`;
-      }
-    }
-  }, [user]);
 
   const loadUserProfile = async (userId: string) => {
     try {
