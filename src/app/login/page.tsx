@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { detectLocalStorageClearing } from '@/utils/supabase';
+import { detectLocalStorageClearing, refreshSession } from '@/utils/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginFailed, setLoginFailed] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const { user, signIn, isLoading } = useAuth();
 
@@ -23,18 +25,32 @@ export default function LoginPage() {
     }
   }, []);
 
-  useEffect(() => {
-    // Redirect if already logged in
-    if (user) {
-      console.log('User detected, redirecting to chat');
-      router.push('/chat');
+  const handleRefreshSession = async () => {
+    setIsRefreshing(true);
+    try {
+      const success = await refreshSession();
+      if (success) {
+        setError('Session refreshed. Redirecting...');
+        // Wait a moment and then try to redirect
+        setTimeout(() => {
+          router.push('/chat');
+        }, 1000);
+      } else {
+        setError('Unable to refresh session. Please try logging in again.');
+      }
+    } catch (err) {
+      console.error('Error refreshing session:', err);
+      setError('Failed to refresh session. Please try logging in again.');
+    } finally {
+      setIsRefreshing(false);
     }
-  }, [user, router]);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setLoginFailed(false);
 
     if (!email || !password) {
       setError('Please enter your email and password');
@@ -55,6 +71,7 @@ export default function LoginPage() {
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Failed to sign in. Please check your credentials.');
+      setLoginFailed(true);
     } finally {
       setLoading(false);
     }
@@ -64,8 +81,8 @@ export default function LoginPage() {
     setShowPassword(!showPassword);
   };
 
-  // Show loading state while checking auth
-  if (isLoading) {
+  // Show loading state while checking auth initially
+  if (isLoading && !user) {
     return (
       <div className="min-h-screen bg-[#0c1220] flex flex-col justify-center items-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#00c8ff]"></div>
@@ -97,7 +114,26 @@ export default function LoginPage() {
         <div className="bg-gray-800/40 backdrop-blur-md py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-700/50">
           {error && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-md text-white text-sm">
-              {error}
+              <p>{error}</p>
+              {loginFailed && (
+                <div className="mt-2 flex flex-col space-y-2">
+                  <p>
+                    Having trouble logging in? Try one of these:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button 
+                      onClick={handleRefreshSession}
+                      disabled={isRefreshing}
+                      className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+                    >
+                      {isRefreshing ? 'Refreshing...' : 'Refresh Session'}
+                    </button>
+                    <Link href="/reset-auth" className="text-xs px-2 py-1 bg-red-900/50 hover:bg-red-800/50 rounded">
+                      Reset Auth State
+                    </Link>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           

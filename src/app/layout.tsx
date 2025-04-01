@@ -46,44 +46,49 @@ export default function RootLayout({
             if (lastLoad && (currentTime - parseInt(lastLoad, 10) < 1000)) {
               console.warn('⚠️ EMERGENCY: Possible redirect loop detected!');
               
-              // Clear all redirection flags and session storage
+              // Only clear session storage, not localStorage
               sessionStorage.clear();
-              
-              // Clear auth-related localStorage that might cause loops
-              localStorage.removeItem('authenticated');
-              localStorage.removeItem('auth_successful');
-              
-              console.log('⚠️ Emergency loop breaker activated - cleared all session storage');
+              console.log('⚠️ Emergency loop breaker activated - cleared session storage');
             }
             
             // Record this page load time
             sessionStorage.setItem('emergency_page_load_time', currentTime.toString());
             
-            // Whitelist only the keys we want to keep
+            // Only clean up localStorage items that are NOT related to Supabase auth
+            const supabasePrefix = 'sb-';
             const keysToKeep = [
+              'supabase.auth.token',
               'user', 
               'auth_successful',
               'authenticated',
-              '__debug_logs' // Keep any debug logs
+              '__debug_logs'
             ];
-            const keysToRemove = [];
             
-            // Find all keys that aren't in our whitelist
+            // Find all keys that should be preserved
+            const keysToPreserve = [];
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
-              if (key && !keysToKeep.includes(key)) {
-                keysToRemove.push(key);
+              // Keep Supabase auth-related items and our whitelist
+              if (key && (key.startsWith(supabasePrefix) || keysToKeep.includes(key))) {
+                keysToPreserve.push(key);
               }
             }
             
-            // Remove all non-whitelisted keys
-            keysToRemove.forEach(key => {
-              console.log('Cleaning up localStorage item:', key);
-              localStorage.removeItem(key);
-            });
+            // Only log non-auth related cleanups
+            let cleanupCount = 0;
             
-            if (keysToRemove.length > 0) {
-              console.log('Cleaned up ' + keysToRemove.length + ' localStorage items');
+            // Now clean up items that aren't in our preserve list
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const key = localStorage.key(i);
+              if (key && !keysToPreserve.includes(key)) {
+                console.log('Cleaning up non-auth localStorage item:', key);
+                localStorage.removeItem(key);
+                cleanupCount++;
+              }
+            }
+            
+            if (cleanupCount > 0) {
+              console.log('Cleaned up ' + cleanupCount + ' non-auth localStorage items');
             }
           } catch (e) {
             console.error('Error in cleanup script:', e);

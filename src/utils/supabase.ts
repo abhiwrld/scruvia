@@ -5,7 +5,40 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 // Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Configure with more resilient settings
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+    // Fallback to cookies if localStorage is problematic
+    storageKey: 'supabase.auth.token',
+    storage: {
+      getItem: (key) => {
+        try {
+          return localStorage.getItem(key);
+        } catch (error) {
+          console.error('Error accessing localStorage:', error);
+          return null;
+        }
+      },
+      setItem: (key, value) => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (error) {
+          console.error('Error writing to localStorage:', error);
+        }
+      },
+      removeItem: (key) => {
+        try {
+          localStorage.removeItem(key);
+        } catch (error) {
+          console.error('Error removing from localStorage:', error);
+        }
+      }
+    }
+  }
+});
 
 // Create a client for bypass operations when necessary (will have Admin policies applied)
 export const supabaseAdmin = supabase;
@@ -256,39 +289,19 @@ export async function signInWithEmail(email: string, password: string, rememberM
   try {
     console.log('Signing in with email', { email, rememberMe });
     
-    // Check if we're in a browser that might have localStorage issues (like Chrome with extensions)
-    let detectedClearingIssue = false;
-    if (typeof window !== 'undefined') {
-      // Try to store a test value in localStorage
-      try {
-        localStorage.setItem('supabase-test', 'test');
-        const testValue = localStorage.getItem('supabase-test');
-        localStorage.removeItem('supabase-test');
-        
-        if (!testValue) {
-          console.warn('Detected localStorage issue - something may be clearing storage');
-          detectedClearingIssue = true;
-        }
-      } catch (e) {
-        console.warn('localStorage test failed:', e);
-        detectedClearingIssue = true;
-      }
-    }
-    
-    // Create client with specific persistence options
+    // Create a more reliable persistSession strategy
     const authOptions = {
       auth: {
         persistSession: rememberMe,
-        // If we detect localStorage issues, store in memory only
-        storage: detectedClearingIssue ? undefined : localStorage
+        // Always use in-memory storage instead of localStorage to avoid clearing issues
+        storage: undefined, // This forces in-memory storage
+        detectSessionInUrl: false, // Disable auto-detection to prevent race conditions
+        autoRefreshToken: true
       }
     };
     
-    // Create a custom client for this login attempt
-    const customClient = createClient(supabaseUrl, supabaseAnonKey, authOptions);
-    
-    // Use the custom client for sign in
-    const { data, error } = await customClient.auth.signInWithPassword({
+    // Use the main client instance to avoid multiple GoTrueClient instances
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -296,15 +309,6 @@ export async function signInWithEmail(email: string, password: string, rememberM
     if (error) {
       logSupabaseError('Error signing in', error);
       throw error;
-    }
-
-    // Sync the session with the main client
-    if (data.session) {
-      // Set the session on the main client
-      await supabase.auth.setSession({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token
-      });
     }
 
     console.log('Sign in successful');
@@ -354,24 +358,35 @@ export async function signOut() {
 export async function getUserPlan(userId: string) {
   try {
     console.log('Fetching subscription for user:', userId);
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .select('plan, status')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .single();
-
-    if (error) {
-      // If no subscription found, return free plan
-      if (error.code === 'PGRST116' || isEmptyError(error)) {
-        console.log('No active subscription found or empty error, defaulting to free plan');
-        return { plan: 'free' };
+    
+    // First create a custom fetch function with proper headers
+    const response = await fetch(
+      `${supabaseUrl}/rest/v1/subscriptions?select=plan,status&user_id=eq.${userId}&status=eq.active&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnonKey,
+          'Authorization': `Bearer ${supabaseAnonKey}`
+        }
       }
-      logSupabaseError('Error fetching subscription', error);
+    );
+    
+    if (!response.ok) {
+      console.log('Subscription API returned error:', response.status);
       return { plan: 'free' };
     }
-
-    return data;
+    
+    const data = await response.json();
+    // If we got results, return the first one
+    if (Array.isArray(data) && data.length > 0) {
+      return data[0];
+    }
+    
+    // Default to free plan if no subscription found
+    console.log('No active subscription found, defaulting to free plan');
+    return { plan: 'free' };
   } catch (err) {
     console.error('Exception in getUserPlan:', err);
     return { plan: 'free' };
@@ -550,13 +565,65 @@ export function detectLocalStorageClearing() {
   const originalClear = localStorage.clear;
   const originalRemoveItem = localStorage.removeItem;
   
+  // Create a cache of auth tokens to restore if they get cleared
+  let authTokenCache: Record<string, string | null> = {};
+  
+  // Cache important auth tokens initially
+  const cacheAuthTokens = (): string[] => {
+    const supabasePrefixedKeys: string[] = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sb-') || key === 'supabase.auth.token')) {
+        try {
+          supabasePrefixedKeys.push(key);
+          authTokenCache[key] = localStorage.getItem(key);
+        } catch (e) {
+          console.error('Error caching auth token:', e);
+        }
+      }
+    }
+    
+    return supabasePrefixedKeys;
+  };
+  
+  // Initial cache of tokens
+  const supabaseKeys = cacheAuthTokens();
+  console.log(`Cached ${supabaseKeys.length} auth tokens for protection`);
+  
+  // Override clear to protect auth tokens
   localStorage.clear = function() {
     console.warn('localStorage.clear detected - this may interfere with authentication');
     console.trace('Storage clear stack trace');
-    return originalClear.call(localStorage);
+    
+    // Backup auth tokens before clear
+    cacheAuthTokens();
+    
+    // Call original clear
+    const result = originalClear.call(localStorage);
+    
+    // Restore auth tokens
+    Object.keys(authTokenCache).forEach(key => {
+      if (authTokenCache[key]) {
+        localStorage.setItem(key, authTokenCache[key] as string);
+      }
+    });
+    
+    console.log('Protected auth tokens restored after localStorage.clear()');
+    
+    return result;
   };
   
   localStorage.removeItem = function(key: string) {
+    // Backup the token if it's an auth token
+    if (key && (key.startsWith('sb-') || key === 'supabase.auth.token')) {
+      try {
+        authTokenCache[key] = localStorage.getItem(key);
+      } catch (e) {
+        console.error('Error backing up auth token before removal:', e);
+      }
+    }
+    
     console.log('Cleaning up localStorage item:', key);
     return originalRemoveItem.call(localStorage, key);
   };
@@ -565,13 +632,29 @@ export function detectLocalStorageClearing() {
   let cleanupCounter = 0;
   
   const observer = new MutationObserver(() => {
-    // Check if our auth token is still there
-    const storageKey = 'sb-' + supabaseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '') + '-auth-token';
-    const hasAuthToken = localStorage.getItem(storageKey);
+    // First check if our initial cache of tokens is still valid
+    let tokensLost = false;
+    let tokensToRestore: string[] = [];
     
-    if (!hasAuthToken) {
+    supabaseKeys.forEach(key => {
+      if (!localStorage.getItem(key) && authTokenCache[key]) {
+        tokensLost = true;
+        tokensToRestore.push(key);
+      }
+    });
+    
+    if (tokensLost) {
       cleanupCounter++;
       console.log(`Cleaned up ${cleanupCounter} localStorage items`);
+      
+      // Restore the lost tokens
+      tokensToRestore.forEach(key => {
+        if (authTokenCache[key]) {
+          localStorage.setItem(key, authTokenCache[key] as string);
+        }
+      });
+      
+      console.log(`Restored ${tokensToRestore.length} auth tokens after cleanup`);
       
       // If we've detected multiple cleanups, log a warning
       if (cleanupCounter > 2) {
@@ -582,4 +665,79 @@ export function detectLocalStorageClearing() {
   
   // Start observing
   observer.observe(document, { childList: true, subtree: true });
+}
+
+// Add a function to fully reset authentication state
+export async function resetAuthState() {
+  try {
+    console.log('Fully resetting authentication state');
+    
+    // First sign out using the Supabase client
+    await supabase.auth.signOut();
+    
+    // Clear browser storage but be careful about other data
+    if (typeof window !== 'undefined') {
+      // Clear only Supabase related items from localStorage
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (
+          key.startsWith('sb-') || 
+          key.includes('supabase') || 
+          key === 'supabase.auth.token')
+        ) {
+          console.log('Removing auth item from localStorage:', key);
+          localStorage.removeItem(key);
+        }
+      }
+      
+      // Clear relevant session storage items
+      sessionStorage.removeItem('supabase.auth.token');
+      
+      // Clear any auth-related cookies
+      document.cookie.split(';').forEach(c => {
+        const cookieName = c.trim().split('=')[0];
+        if (cookieName && (
+          cookieName.includes('supabase') || 
+          cookieName.startsWith('sb-')
+        )) {
+          document.cookie = `${cookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        }
+      });
+    }
+    
+    console.log('Auth state reset complete');
+    return true;
+  } catch (error) {
+    console.error('Error resetting auth state:', error);
+    return false;
+  }
+}
+
+// Add a function to manually refresh the session token
+export async function refreshSession() {
+  try {
+    console.log('Manually refreshing auth session');
+    
+    // Get current session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      console.log('No session to refresh');
+      return false;
+    }
+    
+    // Force a token refresh
+    const { data, error } = await supabase.auth.refreshSession();
+    
+    if (error) {
+      console.error('Error refreshing session:', error);
+      return false;
+    }
+    
+    console.log('Session refreshed successfully');
+    return true;
+  } catch (error) {
+    console.error('Exception in refreshSession:', error);
+    return false;
+  }
 } 
