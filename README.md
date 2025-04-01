@@ -101,6 +101,27 @@ Tracks API usage:
 - tokens_used (INTEGER)
 - created_at (TIMESTAMP)
 
+## User Management
+
+### Making Users Pro Members
+
+To manually upgrade a user to a Pro membership:
+
+1. Find the user's UUID by email using the SQL script in `supabase/find_user_by_email.sql`:
+   - Open the Supabase SQL Editor
+   - Load and edit the script to replace 'user@example.com' with the user's actual email
+   - Run the script to retrieve the user's UUID and current status
+
+2. Upgrade the user to Pro status using the SQL script in `supabase/make_user_pro.sql`:
+   - Open the Supabase SQL Editor
+   - Load and edit the script to replace 'YOUR-USER-ID-HERE' with the user's UUID
+   - Run the script to:
+     - Update the user's plan to 'pro' in the profiles table
+     - Create or update a corresponding entry in the subscriptions table
+     - Verify the changes were applied correctly
+
+3. The user will have pro features on their next login or page refresh.
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

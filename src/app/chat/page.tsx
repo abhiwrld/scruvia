@@ -15,6 +15,7 @@ import { Switch } from '@headlessui/react';
 import { SendIcon } from '@/app/components/SendIcon';
 import Counter from '@/app/components/Counter';
 import CodeBlock from '@/app/components/CodeBlock';
+import ThinkingContent from '@/app/components/ThinkingContent';
 import { useAuth } from '@/context/AuthContext';
 import { saveChat, getChats, incrementQuestionCount } from '@/utils/supabase';
 import type { DetailedHTMLProps, TableHTMLAttributes, HTMLAttributes } from 'react';
@@ -399,10 +400,26 @@ export default function ChatPage() {
             });
             
             setActiveCitations(citationsWithMetadata);
-            // Uncomment the following line if you want to automatically show web sources when citations are available
-            // setShowWebSources(true);
+            // Automatically show web sources when citations are available
+            setShowWebSources(true);
+            console.log('Web sources should be visible now:', citationsWithMetadata);
           } else {
             console.log('No citations found in the response');
+            
+            // If response contains [1], [2], etc. but no citations were extracted, create dummy citations
+            const citationReferences = finalContent.match(/\[\d+\]/g);
+            if (citationReferences && citationReferences.length > 0) {
+              console.log('Found citation references but no citations object:', citationReferences);
+              const dummyCitations = citationReferences.map((ref, index) => ({
+                id: index.toString(),
+                text: `Source ${ref}`,
+                url: `https://www.google.com/search?q=${encodeURIComponent(userMessage.content)}`
+              }));
+              
+              setActiveCitations(dummyCitations);
+              setShowWebSources(true);
+              console.log('Created dummy citations for references:', dummyCitations);
+            }
           }
         }
       } catch (error) {
@@ -561,6 +578,27 @@ export default function ChatPage() {
                     >
                       {activeCitations.length}
                     </button> sources
+                    {/* Debug button */}
+                    <button 
+                      className="ml-4 text-yellow-400 hover:underline"
+                      onClick={() => {
+                        console.log('Debug - Citations:', activeCitations);
+                        console.log('Debug - showWebSources:', showWebSources);
+                        // Add sample citation if none exist
+                        if (activeCitations.length === 0) {
+                          const sampleCitation = {
+                            id: "debug-1",
+                            text: "Sample citation for debugging",
+                            url: "https://example.com"
+                          };
+                          setActiveCitations([sampleCitation]);
+                        }
+                        // Force show web sources
+                        setShowWebSources(true);
+                      }}
+                    >
+                      View Sources
+                    </button>
                   </>
                 )}
               </span>
@@ -590,102 +628,10 @@ export default function ChatPage() {
                   >
                     {message.role === 'assistant' && message.isStreaming ? (
                       <div className="prose prose-invert">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({className, children, ...props}: any) {
-                              const match = /language-(\w+)/.exec(className || '')
-                              return !match ? (
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              ) : (
-                                <CodeBlock className={`language-${match[1]}`}>
-                                  {String(children).replace(/\n$/, '')}
-                                </CodeBlock>
-                              )
-                            },
-                            // Add improved heading styles
-                            h1(props: any) {
-                              return <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />
-                            },
-                            h2(props: any) {
-                              return <h2 className="text-xl font-bold mt-5 mb-3 text-white" {...props} />
-                            },
-                            h3(props: any) {
-                              return <h3 className="text-lg font-bold mt-4 mb-2 text-white" {...props} />
-                            },
-                            // Add table styling with simpler types
-                            table(props: any) {
-                              return (
-                                <div className="overflow-x-auto my-4 rounded-md border border-gray-700">
-                                  <table className="min-w-full divide-y divide-gray-700" {...props} />
-                                </div>
-                              )
-                            },
-                            thead(props: any) {
-                              return <thead className="bg-gray-800" {...props} />
-                            },
-                            tbody(props: any) {
-                              return <tbody className="divide-y divide-gray-700 bg-gray-900/50" {...props} />
-                            },
-                            tr(props: any) {
-                              return <tr className="hover:bg-gray-800/70 transition-colors" {...props} />
-                            },
-                            th(props: any) {
-                              return <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />
-                            },
-                            td(props: any) {
-                              return <td className="px-4 py-3 text-sm text-gray-200" {...props} />
-                            },
-                            // Modified to properly detect citation references in text
-                            p(props: any) {
-                              return (
-                                <p {...props}>
-                                  {React.Children.map(props.children, child => {
-                                    if (typeof child === 'string') {
-                                      // Split by citation pattern
-                                      const parts = child.split(/(\[\d+\])/g);
-                                      if (parts.length > 1) {
-                                        return parts.map((part, i) => {
-                                          if (part.match(/^\[\d+\]$/)) {
-                                            return (
-                                              <button 
-                                                key={i}
-                                                className="text-[#00c8ff] hover:underline cursor-pointer inline-block"
-                                                onClick={() => setShowWebSources(true)}
-                                              >
-                                                {part}
-                                              </button>
-                                            );
-                                          }
-                                          return part;
-                                        });
-                                      }
-                                    }
-                                    return child;
-                                  })}
-                                </p>
-                              );
-                            },
-                            // Add back the link handling for regular links
-                            a({href, children, ...props}: any) {
-                              return (
-                                <a 
-                                  href={href} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="text-[#00c8ff] hover:underline"
-                                  {...props}
-                                >
-                                  {children}
-                                </a>
-                              );
-                            }
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
+                        <ThinkingContent 
+                          content={message.content}
+                          onCitationClick={() => setShowWebSources(true)} 
+                        />
                         <div className="mt-2 flex items-center text-[#00c8ff]">
                           <div className="inline-block h-2 w-2 mr-2 bg-[#00c8ff] rounded-full animate-pulse"></div>
                           Generating response...
@@ -693,102 +639,109 @@ export default function ChatPage() {
                       </div>
                     ) : (
                       <div className="prose prose-invert">
-                        <ReactMarkdown
-                          remarkPlugins={[remarkGfm]}
-                          components={{
-                            code({className, children, ...props}: any) {
-                              const match = /language-(\w+)/.exec(className || '')
-                              return !match ? (
-                                <code className={className} {...props}>
-                                  {children}
-                                </code>
-                              ) : (
-                                <CodeBlock className={`language-${match[1]}`}>
-                                  {String(children).replace(/\n$/, '')}
-                                </CodeBlock>
-                              )
-                            },
-                            // Add improved heading styles
-                            h1(props: any) {
-                              return <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />
-                            },
-                            h2(props: any) {
-                              return <h2 className="text-xl font-bold mt-5 mb-3 text-white" {...props} />
-                            },
-                            h3(props: any) {
-                              return <h3 className="text-lg font-bold mt-4 mb-2 text-white" {...props} />
-                            },
-                            // Add table styling with simpler types
-                            table(props: any) {
-                              return (
-                                <div className="overflow-x-auto my-4 rounded-md border border-gray-700">
-                                  <table className="min-w-full divide-y divide-gray-700" {...props} />
-                                </div>
-                              )
-                            },
-                            thead(props: any) {
-                              return <thead className="bg-gray-800" {...props} />
-                            },
-                            tbody(props: any) {
-                              return <tbody className="divide-y divide-gray-700 bg-gray-900/50" {...props} />
-                            },
-                            tr(props: any) {
-                              return <tr className="hover:bg-gray-800/70 transition-colors" {...props} />
-                            },
-                            th(props: any) {
-                              return <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />
-                            },
-                            td(props: any) {
-                              return <td className="px-4 py-3 text-sm text-gray-200" {...props} />
-                            },
-                            // Modified to properly detect citation references in text
-                            p(props: any) {
-                              return (
-                                <p {...props}>
-                                  {React.Children.map(props.children, child => {
-                                    if (typeof child === 'string') {
-                                      // Split by citation pattern
-                                      const parts = child.split(/(\[\d+\])/g);
-                                      if (parts.length > 1) {
-                                        return parts.map((part, i) => {
-                                          if (part.match(/^\[\d+\]$/)) {
-                                            return (
-                                              <button 
-                                                key={i}
-                                                className="text-[#00c8ff] hover:underline cursor-pointer inline-block"
-                                                onClick={() => setShowWebSources(true)}
-                                              >
-                                                {part}
-                                              </button>
-                                            );
-                                          }
-                                          return part;
-                                        });
+                        {message.role === 'assistant' ? (
+                          <ThinkingContent 
+                            content={message.content}
+                            onCitationClick={() => setShowWebSources(true)}
+                          />
+                        ) : (
+                          <ReactMarkdown
+                            remarkPlugins={[remarkGfm]}
+                            components={{
+                              code({className, children, ...props}: any) {
+                                const match = /language-(\w+)/.exec(className || '')
+                                return !match ? (
+                                  <code className={className} {...props}>
+                                    {children}
+                                  </code>
+                                ) : (
+                                  <CodeBlock className={`language-${match[1]}`}>
+                                    {String(children).replace(/\n$/, '')}
+                                  </CodeBlock>
+                                )
+                              },
+                              // Add improved heading styles
+                              h1(props: any) {
+                                return <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />
+                              },
+                              h2(props: any) {
+                                return <h2 className="text-xl font-bold mt-5 mb-3 text-white" {...props} />
+                              },
+                              h3(props: any) {
+                                return <h3 className="text-lg font-bold mt-4 mb-2 text-white" {...props} />
+                              },
+                              // Add table styling with simpler types
+                              table(props: any) {
+                                return (
+                                  <div className="overflow-x-auto my-4 rounded-md border border-gray-700">
+                                    <table className="min-w-full divide-y divide-gray-700" {...props} />
+                                  </div>
+                                )
+                              },
+                              thead(props: any) {
+                                return <thead className="bg-gray-800" {...props} />
+                              },
+                              tbody(props: any) {
+                                return <tbody className="divide-y divide-gray-700 bg-gray-900/50" {...props} />
+                              },
+                              tr(props: any) {
+                                return <tr className="hover:bg-gray-800/70 transition-colors" {...props} />
+                              },
+                              th(props: any) {
+                                return <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider" {...props} />
+                              },
+                              td(props: any) {
+                                return <td className="px-4 py-3 text-sm text-gray-200" {...props} />
+                              },
+                              // Modified to properly detect citation references in text
+                              p(props: any) {
+                                return (
+                                  <p {...props}>
+                                    {React.Children.map(props.children, child => {
+                                      if (typeof child === 'string') {
+                                        // Split by citation pattern
+                                        const parts = child.split(/(\[\d+\])/g);
+                                        if (parts.length > 1) {
+                                          return parts.map((part, i) => {
+                                            if (part.match(/^\[\d+\]$/)) {
+                                              return (
+                                                <button 
+                                                  key={i}
+                                                  className="text-[#00c8ff] hover:underline cursor-pointer inline-block"
+                                                  onClick={() => setShowWebSources(true)}
+                                                >
+                                                  {part}
+                                                </button>
+                                              );
+                                            }
+                                            return part;
+                                          });
+                                        }
                                       }
-                                    }
-                                    return child;
-                                  })}
-                                </p>
-                              );
-                            },
-                            // Add back the link handling for regular links
-                            a({href, children, ...props}: any) {
-                              return (
-                                <a 
-                                  href={href} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="text-[#00c8ff] hover:underline"
-                                  {...props}
-                                >
-                                  {children}
-                                </a>
-                              );
-                            }
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
+                                      return child;
+                                    })}
+                                  </p>
+                                );
+                              },
+                              // Add back the link handling for regular links
+                              a({href, children, ...props}: any) {
+                                return (
+                                  <a 
+                                    href={href} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="text-[#00c8ff] hover:underline"
+                                    {...props}
+                                  >
+                                    {children}
+                                  </a>
+                                );
+                              }
+                            }}
+                          >
+                            {message.content}
+                          </ReactMarkdown>
+                        )}
                       </div>
                     )}
                     
@@ -862,8 +815,8 @@ export default function ChatPage() {
 
           {/* Web search results sidebar */}
           {showWebSources && activeCitations.length > 0 && (
-            <div className="w-96 border-l border-gray-700/50 bg-gray-900/50 backdrop-blur-sm overflow-y-auto hidden lg:block">
-              <div className="p-4 bg-gray-800/70 backdrop-blur-sm border-b border-gray-700/50 flex justify-between items-center">
+            <div className="w-96 border-l border-gray-700/50 bg-gray-900/80 backdrop-blur-sm overflow-y-auto hidden lg:block">
+              <div className="p-4 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 flex justify-between items-center">
                 <h3 className="font-medium text-white">Sources</h3>
                 <button 
                   className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/80 transition-all"
@@ -883,7 +836,7 @@ export default function ChatPage() {
           {/* Mobile web search results overlay */}
           {showWebSources && activeCitations.length > 0 && (
             <div className="fixed inset-0 bg-gray-900/95 z-50 lg:hidden flex flex-col">
-              <div className="p-4 bg-gray-800/70 backdrop-blur-sm border-b border-gray-700/50 flex justify-between items-center">
+              <div className="p-4 bg-gray-800/90 backdrop-blur-sm border-b border-gray-700/50 flex justify-between items-center">
                 <h3 className="font-medium text-white">Sources</h3>
                 <button 
                   className="p-1.5 rounded-full text-gray-400 hover:text-white hover:bg-gray-700/80 transition-all"
