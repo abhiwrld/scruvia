@@ -15,6 +15,10 @@ const nextConfig = {
     },
     appDir: true,
   },
+  // Expose environment variables to the browser
+  env: {
+    PERPLEXITY_API_KEY: process.env.PERPLEXITY_API_KEY,
+  },
   output: 'standalone',
   async headers() {
     return [

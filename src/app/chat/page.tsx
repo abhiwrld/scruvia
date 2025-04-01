@@ -77,6 +77,29 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  // Effect to ensure session is restored on load
+  useEffect(() => {
+    // Import and run ensureSessionRestored on component mount
+    const attemptSessionRestoration = async () => {
+      try {
+        const { ensureSessionRestored } = await import('@/utils/supabase');
+        const success = await ensureSessionRestored();
+        if (success) {
+          console.log('Session manually restored, refreshing page');
+          // Force a reload after successful session restoration
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error('Failed to restore session:', error);
+      }
+    };
+    
+    // Only attempt restoration if we have a pending login but no user
+    if (!user && typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true') {
+      attemptSessionRestoration();
+    }
+  }, [user]);
+  
   // Redirect to login if not authenticated
   useEffect(() => {
     // Check for pending login flag in case session is still initializing
@@ -127,7 +150,7 @@ export default function ChatPage() {
       }
     }
   }, [isLoading, user, router]);
-
+  
   useEffect(() => {
     // Set up user profile and questions remaining
     if (user && profile) {
@@ -293,7 +316,7 @@ export default function ChatPage() {
           (chunk) => {
             // Safely update the streaming message with each chunk
             streamContent += chunk;
-            setMessages(prevMessages => 
+            setMessages((prevMessages: Message[]) => 
               prevMessages.map(msg => 
                 msg.id === placeholderId 
                   ? { ...msg, content: streamContent } 
@@ -481,29 +504,6 @@ export default function ChatPage() {
   if (!user && !bypassAuthLoading && !localStorage.getItem('userLoginPending')) {
     return null;
   }
-
-  // Add effect to ensure session is restored on load
-  useEffect(() => {
-    // Import and run ensureSessionRestored on component mount
-    const attemptSessionRestoration = async () => {
-      try {
-        const { ensureSessionRestored } = await import('@/utils/supabase');
-        const success = await ensureSessionRestored();
-        if (success) {
-          console.log('Session manually restored, refreshing page');
-          // Force a reload after successful session restoration
-          window.location.reload();
-        }
-      } catch (error) {
-        console.error('Failed to restore session:', error);
-      }
-    };
-    
-    // Only attempt restoration if we have a pending login but no user
-    if (!user && typeof window !== 'undefined' && localStorage.getItem('userLoginPending') === 'true') {
-      attemptSessionRestoration();
-    }
-  }, [user]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gradient-to-b from-[#0c1220] to-[#111827] text-white">

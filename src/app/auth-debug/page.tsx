@@ -1,127 +1,84 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { debugAuthState, resetAuthState, refreshSession, supabase } from '@/utils/supabase';
-import { useAuth } from '@/context/AuthContext';
 
-type AuthState = {
-  pendingLogin: string | null;
-  session: any;
-  user: any;
-  hasLocalSession: boolean;
-};
+interface AuthState {
+  localStorage: { [key: string]: string | null };
+  sessionStorage: { [key: string]: string | null };
+  cookies: string;
+}
 
 export default function AuthDebugPage() {
   const [authState, setAuthState] = useState<AuthState | null>(null);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
-  const [subscriptionResults, setSubscriptionResults] = useState<any>(null);
-  const { user } = useAuth();
-  const router = useRouter();
-
+  const [message, setMessage] = useState<string>('');
+  
   useEffect(() => {
+    // Get initial auth debug state
     updateAuthState();
   }, []);
+  
+  const updateAuthState = () => {
+    console.log('Updating auth debug state');
+    const state: AuthState = {
+      localStorage: {},
+      sessionStorage: {},
+      cookies: document.cookie,
+    };
 
-  const updateAuthState = async () => {
-    setLoading(true);
-    try {
-      const state = await debugAuthState();
-      setAuthState(state as AuthState);
-    } catch (error) {
-      console.error('Error getting auth state:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResetAuth = async () => {
-    setLoading(true);
-    setMessage('');
-    
-    try {
-      const success = await resetAuthState();
-      
-      if (success) {
-        setMessage('Authentication state has been reset successfully');
-        // Reload page after reset
-        window.location.reload();
-      } else {
-        setMessage('Failed to reset authentication state');
-      }
-    } catch (error) {
-      console.error('Error resetting auth:', error);
-      setMessage('Error: ' + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRefreshSession = async () => {
-    setLoading(true);
-    setMessage('');
-    
-    try {
-      const success = await refreshSession();
-      
-      if (success) {
-        setMessage('Session refreshed successfully');
-        // Update auth state to show changes
-        updateAuthState();
-      } else {
-        setMessage('Failed to refresh session');
-      }
-    } catch (error) {
-      console.error('Error refreshing session:', error);
-      setMessage('Error: ' + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const checkSubscription = async () => {
-    setLoading(true);
-    setMessage('');
-    
-    if (!user) {
-      setMessage('No user logged in to check subscription');
-      setLoading(false);
-      return;
-    }
-    
-    try {
-      // Try direct Postgres API call with proper headers
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/subscriptions?select=*&user_id=eq.${user.id}`,
-        {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-            'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`
-          }
+    // Get all localStorage items
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        try {
+          state.localStorage[key] = localStorage.getItem(key);
+        } catch (error) {
+          state.localStorage[key] = 'Error reading value';
         }
-      );
+      }
+    }
+
+    // Get all sessionStorage items
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key) {
+        try {
+          state.sessionStorage[key] = sessionStorage.getItem(key);
+        } catch (error) {
+          state.sessionStorage[key] = 'Error reading value';
+        }
+      }
+    }
+
+    setAuthState(state);
+    return state;
+  };
+  
+  const clearAllAuthData = async () => {
+    setLoading(true);
+    setMessage('');
+    
+    try {
+      // Clear all localStorage
+      localStorage.clear();
       
-      const data = await response.json();
-      setSubscriptionResults({
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries([...response.headers.entries()]),
-        data
+      // Clear all sessionStorage
+      sessionStorage.clear();
+      
+      // Clear all cookies
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
       });
       
-      if (!response.ok) {
-        setMessage(`API Error: ${response.status} ${response.statusText}`);
-      } else {
-        setMessage('Subscription API check completed successfully');
-      }
+      const state = updateAuthState();
+      setMessage('Successfully cleared all authentication data');
+      
+      // Show final state
+      console.log('Final auth state after clearing all data:', state);
     } catch (error) {
-      console.error('Error checking subscription:', error);
-      setMessage('Error: ' + (error instanceof Error ? error.message : String(error)));
-      setSubscriptionResults({ error: String(error) });
+      console.error('Error clearing auth data:', error);
+      setMessage('Error clearing auth data: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setLoading(false);
     }
@@ -135,126 +92,76 @@ export default function AuthDebugPage() {
     if (typeof value === 'boolean') return <span className="text-blue-500">{value.toString()}</span>;
     return <span>{String(value)}</span>;
   };
-
+  
   return (
-    <div className="min-h-screen bg-[#0c1220] p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-8">
-          <span className="bg-gradient-to-r from-[#9c6bff] to-[#00c8ff] bg-clip-text text-transparent">
-            Auth Debugging
-          </span>
-        </h1>
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-3xl font-bold mb-6">🔧 Authentication Debug Page</h1>
+        <p className="mb-6 text-gray-400">
+          Use this page to debug and fix authentication issues. You can view the current auth state and clear all auth data to fix loops.
+        </p>
         
-        {message && (
-          <div className={`mb-6 p-4 rounded-md ${message.includes('Error') ? 'bg-red-900/50 border border-red-500/50' : 'bg-green-900/50 border border-green-500/50'}`}>
-            <p className="text-white">{message}</p>
-          </div>
-        )}
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="flex gap-4 my-6">
           <button
             onClick={updateAuthState}
-            disabled={loading}
-            className="bg-gray-800 hover:bg-gray-700 text-white py-2 px-4 rounded-md"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
           >
-            {loading ? 'Loading...' : 'Refresh Auth State'}
+            Refresh Auth State
           </button>
           
           <button
-            onClick={handleRefreshSession}
+            onClick={clearAllAuthData}
             disabled={loading}
-            className="bg-blue-800 hover:bg-blue-700 text-white py-2 px-4 rounded-md"
+            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
           >
-            {loading ? 'Loading...' : 'Refresh Session Token'}
-          </button>
-          
-          <button
-            onClick={checkSubscription}
-            disabled={loading || !user}
-            className="bg-violet-800 hover:bg-violet-700 text-white py-2 px-4 rounded-md"
-          >
-            {loading ? 'Loading...' : 'Check Subscription API'}
-          </button>
-          
-          <button
-            onClick={handleResetAuth}
-            disabled={loading}
-            className="bg-red-800 hover:bg-red-700 text-white py-2 px-4 rounded-md"
-          >
-            {loading ? 'Loading...' : 'Reset Auth State'}
+            {loading ? 'Clearing...' : 'Clear All Auth Data'}
           </button>
         </div>
         
-        <Link href="/" className="inline-block mb-8 text-[#00c8ff] hover:text-[#9c6bff]">
-          ← Back to Home
-        </Link>
-        
-        <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 mb-8">
-          <h2 className="text-xl font-bold text-white mb-4">Auth State</h2>
-          {authState ? (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-md font-medium text-gray-300 mb-1">User</h3>
-                <div className="bg-gray-900/50 p-3 rounded">
-                  {formatValue(authState.user)}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-md font-medium text-gray-300 mb-1">Session</h3>
-                <div className="bg-gray-900/50 p-3 rounded">
-                  {formatValue(authState.session)}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <h3 className="text-md font-medium text-gray-300 mb-1">Pending Login</h3>
-                  <div className="bg-gray-900/50 p-3 rounded">
-                    {formatValue(authState.pendingLogin)}
-                  </div>
-                </div>
-                
-                <div>
-                  <h3 className="text-md font-medium text-gray-300 mb-1">Local Session</h3>
-                  <div className="bg-gray-900/50 p-3 rounded">
-                    {formatValue(authState.hasLocalSession)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-gray-400">Loading auth state...</p>
-          )}
-        </div>
-        
-        {subscriptionResults && (
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Subscription API Results</h2>
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-md font-medium text-gray-300 mb-1">Status</h3>
-                <div className="bg-gray-900/50 p-3 rounded">
-                  {subscriptionResults.status} {subscriptionResults.statusText}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-md font-medium text-gray-300 mb-1">Headers</h3>
-                <div className="bg-gray-900/50 p-3 rounded">
-                  {formatValue(subscriptionResults.headers)}
-                </div>
-              </div>
-              
-              <div>
-                <h3 className="text-md font-medium text-gray-300 mb-1">Data</h3>
-                <div className="bg-gray-900/50 p-3 rounded">
-                  {formatValue(subscriptionResults.data)}
-                </div>
-              </div>
-            </div>
+        {message && (
+          <div className="my-4 p-4 bg-blue-900 bg-opacity-30 rounded">
+            {message}
           </div>
         )}
+        
+        <h2 className="text-xl font-semibold mt-8 mb-4">Current Auth State</h2>
+        {authState ? (
+          <div className="bg-gray-800 rounded-lg p-4 overflow-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  <th className="text-left pb-2 border-b border-gray-700">Property</th>
+                  <th className="text-left pb-2 border-b border-gray-700">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(authState).map(([key, value]) => (
+                  <tr key={key} className="border-b border-gray-700">
+                    <td className="py-2 pr-4 font-mono text-sm">{key}</td>
+                    <td className="py-2 font-mono text-sm">{formatValue(value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Loading auth state...</p>
+        )}
+        
+        <div className="mt-8 pt-4 border-t border-gray-700">
+          <h2 className="text-xl font-semibold mb-4">Navigation</h2>
+          <div className="flex gap-4">
+            <Link href="/" className="text-blue-400 hover:underline">
+              Home
+            </Link>
+            <Link href="/auth" className="text-blue-400 hover:underline">
+              Auth Page
+            </Link>
+            <Link href="/chat" className="text-blue-400 hover:underline">
+              Chat
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

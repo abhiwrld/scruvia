@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { detectLocalStorageClearing, refreshSession } from '@/utils/supabase';
+import { detectLocalStorageClearing } from '@/utils/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,44 +13,71 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [loginFailed, setLoginFailed] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const router = useRouter();
   const { user, signIn, isLoading } = useAuth();
 
+  // Check for session recovery on mount
   useEffect(() => {
     // Set up protection against localStorage clearing
     if (typeof window !== 'undefined') {
       detectLocalStorageClearing();
+      
+      // Check if we're recovering a session
+      const recoveringSessionId = localStorage.getItem('recoveringSession');
+      const recoverParam = new URLSearchParams(window.location.search).get('recover');
+      
+      if (recoveringSessionId || recoverParam) {
+        console.log('Detected session recovery attempt');
+        
+        // Set a flag to prevent redirection loops
+        const isRecovering = localStorage.getItem('isRecovering');
+        if (isRecovering === 'true') {
+          console.log('Already in recovery process, preventing loop');
+          localStorage.removeItem('isRecovering');
+          localStorage.removeItem('recoveringSession');
+          return;
+        }
+        
+        localStorage.setItem('isRecovering', 'true');
+        
+        // Show recovery message
+        setError('Your session needs to be restored. Please login again to continue.');
+        
+        // Auto-fill email if available in localStorage (from a previous login)
+        const lastEmail = localStorage.getItem('lastLoginEmail');
+        if (lastEmail) {
+          setEmail(lastEmail);
+        }
+      }
     }
   }, []);
 
-  const handleRefreshSession = async () => {
-    setIsRefreshing(true);
-    try {
-      const success = await refreshSession();
-      if (success) {
-        setError('Session refreshed. Redirecting...');
-        // Wait a moment and then try to redirect
-        setTimeout(() => {
+  useEffect(() => {
+    // Redirect if already logged in
+    if (user) {
+      console.log('User detected, redirecting to chat');
+      
+      // Check if we should redirect to a specific page
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        const fromPath = urlParams.get('from');
+        
+        if (fromPath) {
+          console.log('Redirecting to original page:', fromPath);
+          router.push(fromPath);
+        } else {
           router.push('/chat');
-        }, 1000);
+        }
       } else {
-        setError('Unable to refresh session. Please try logging in again.');
+        router.push('/chat');
       }
-    } catch (err) {
-      console.error('Error refreshing session:', err);
-      setError('Failed to refresh session. Please try logging in again.');
-    } finally {
-      setIsRefreshing(false);
     }
-  };
+  }, [user, router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setLoginFailed(false);
 
     if (!email || !password) {
       setError('Please enter your email and password');
@@ -59,19 +86,29 @@ export default function LoginPage() {
     }
 
     try {
+      // Store email for recovery if needed
+      localStorage.setItem('lastLoginEmail', email);
+      
       // Create a local variable to prevent race conditions
       const email_val = email;
       const password_val = password;
       const remember_val = rememberMe;
 
+      // Mark pending login to prevent redirect loops
+      localStorage.setItem('userLoginPending', 'true');
+      
       // Sign in with Supabase
       console.log('Attempting sign in, remember me:', remember_val);
       await signIn(email_val, password_val, remember_val);
       console.log('Login successful - waiting for auth state change to redirect');
+      
+      // Clear recovery flags if present
+      localStorage.removeItem('recoveringSession');
+      localStorage.removeItem('isRecovering');
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Failed to sign in. Please check your credentials.');
-      setLoginFailed(true);
+      localStorage.removeItem('userLoginPending');
     } finally {
       setLoading(false);
     }
@@ -81,8 +118,8 @@ export default function LoginPage() {
     setShowPassword(!showPassword);
   };
 
-  // Show loading state while checking auth initially
-  if (isLoading && !user) {
+  // Show loading state while checking auth
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#0c1220] flex flex-col justify-center items-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#00c8ff]"></div>
@@ -114,26 +151,7 @@ export default function LoginPage() {
         <div className="bg-gray-800/40 backdrop-blur-md py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-700/50">
           {error && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-md text-white text-sm">
-              <p>{error}</p>
-              {loginFailed && (
-                <div className="mt-2 flex flex-col space-y-2">
-                  <p>
-                    Having trouble logging in? Try one of these:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button 
-                      onClick={handleRefreshSession}
-                      disabled={isRefreshing}
-                      className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
-                    >
-                      {isRefreshing ? 'Refreshing...' : 'Refresh Session'}
-                    </button>
-                    <Link href="/reset-auth" className="text-xs px-2 py-1 bg-red-900/50 hover:bg-red-800/50 rounded">
-                      Reset Auth State
-                    </Link>
-                  </div>
-                </div>
-              )}
+              {error}
             </div>
           )}
           

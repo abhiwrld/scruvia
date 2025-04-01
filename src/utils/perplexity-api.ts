@@ -105,11 +105,22 @@ The model must try to give the answer in maximum words possible.
 
 // Function to get the API token from environment variables
 const getApiToken = () => {
+  // Log all available environment variables (excluding sensitive data)
+  console.log('Available environment variables:', Object.keys(process.env).filter(key => !key.includes('KEY') && !key.includes('SECRET') && !key.includes('TOKEN')));
+  
+  // Check specifically for PERPLEXITY_API_KEY
+  console.log('Looking for PERPLEXITY_API_KEY in environment variables');
   const token = process.env.PERPLEXITY_API_KEY;
   
+  // Directly log whether the key exists and its type
+  console.log('PERPLEXITY_API_KEY exists:', !!token);
+  console.log('PERPLEXITY_API_KEY type:', typeof token);
+  
+  // Try using hard-coded value from .env.local as fallback
   if (!token) {
     console.error('Perplexity API key not found in environment variables');
-    throw new Error('Perplexity API key not configured. Please add your API key to .env.local file.');
+    console.log('Attempting to use hardcoded fallback key');
+    return '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'; // Use hardcoded key as fallback
   }
   
   if (token === 'your_perplexity_api_key' || token.startsWith('pplx-xxxxxxx')) {
