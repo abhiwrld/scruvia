@@ -14,6 +14,8 @@ export default function PricingPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [showPhoneVerification, setShowPhoneVerification] = useState(false);
   const [pendingPlanUpgrade, setPendingPlanUpgrade] = useState<string | null>(null);
+  const [backButtonText, setBackButtonText] = useState('Back to Chat');
+  const [backButtonUrl, setBackButtonUrl] = useState('/chat');
   const router = useRouter();
   
   useEffect(() => {
@@ -23,6 +25,15 @@ export default function PricingPage() {
       const userData = JSON.parse(user);
       if (userData.plan) {
         setCurrentPlan(userData.plan);
+      }
+    }
+    
+    // Check referrer to set appropriate back button
+    if (typeof window !== 'undefined') {
+      const referrer = document.referrer;
+      if (referrer && (referrer.includes('/') || referrer.endsWith('.com') || referrer.endsWith('.com/'))) {
+        setBackButtonText('Back to Home');
+        setBackButtonUrl('/');
       }
     }
   }, []);
@@ -99,13 +110,19 @@ export default function PricingPage() {
 
   return (
     <div className="min-h-screen bg-[#0c1220] flex flex-col py-12 px-6 md:px-12 relative overflow-hidden">
-      {/* Back to chat button */}
-      <div className="absolute top-4 left-4 z-10">
-        <Link href="/chat" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
+      {/* Back navigation */}
+      <div className="absolute top-4 left-4 z-10 flex space-x-4">
+        <Link href="/" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          <span>Back to Chat</span>
+          <span>Back to Home</span>
+        </Link>
+        <Link href="/chat" className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+          </svg>
+          <span>Go to Chat</span>
         </Link>
       </div>
       {showSuccess && (
@@ -130,9 +147,14 @@ export default function PricingPage() {
       <div className="max-w-7xl mx-auto w-full">
         <div className="text-center mb-16">
           <h1 className="text-4xl md:text-5xl font-bold text-white mb-6">Upgrade your plan</h1>
-          <p className="text-xl text-gray-300 max-w-2xl mx-auto">
+          <p className="text-xl text-gray-300 max-w-2xl mx-auto mb-4">
             Choose the perfect plan for your needs and supercharge your financial management with Scruvia AI.
           </p>
+          <div className="inline-block bg-gray-800/70 px-4 py-2 rounded-lg border border-gray-700/50 mt-4">
+            <p className="text-gray-300 text-sm font-medium">
+              All prices are exclusive of 18% GST
+            </p>
+          </div>
         </div>
 
         {/* Tab selector */}
@@ -219,6 +241,7 @@ export default function PricingPage() {
                 <div className="flex items-end mb-6">
                   <span className="text-4xl font-bold text-white">₹499</span>
                   <span className="text-gray-400 ml-2 mb-1">/month</span>
+                  <span className="text-gray-500 text-xs ml-2">+GST</span>
                 </div>
                 <p className="text-gray-300 mb-6">
                   Ideal for individuals who need more comprehensive tax and financial assistance.
@@ -277,6 +300,7 @@ export default function PricingPage() {
                 <div className="flex items-end mb-6">
                   <span className="text-4xl font-bold text-white">₹1,999</span>
                   <span className="text-gray-400 ml-2 mb-1">/month</span>
+                  <span className="text-gray-500 text-xs ml-2">+GST</span>
                 </div>
                 <p className="text-gray-300 mb-6">
                   Advanced AI-powered tax and financial assistance for professionals.
@@ -340,6 +364,7 @@ export default function PricingPage() {
                 <div className="flex items-end mb-6">
                   <span className="text-4xl font-bold text-white">₹2,499</span>
                   <span className="text-gray-400 ml-2 mb-1">/user/month</span>
+                  <span className="text-gray-500 text-xs ml-2">+GST</span>
                 </div>
                 <p className="text-gray-300 mb-6">
                   Supercharge your team's work with a secure, collaborative workspace for tax and financial management.
@@ -412,12 +437,13 @@ export default function PricingPage() {
               Financial insights
             </div>
             <div className="bg-gray-800/30 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-gray-300">
-              Secure data storage
-            </div>
-            <div className="bg-gray-800/30 backdrop-blur-sm px-4 py-2 rounded-full text-sm text-gray-300">
               24/7 availability
             </div>
           </div>
+          
+          <p className="text-gray-400 mt-8 text-sm">
+            <span className="bg-gray-800/50 px-3 py-1 rounded-md">All prices are subject to additional 18% GST</span>
+          </p>
         </div>
       </div>
     </div>
