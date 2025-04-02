@@ -63,7 +63,7 @@ export default function CTA() {
               Join the Beta for Analytics Dashboard
             </h2>
             <p className="text-lg mb-8 opacity-90">
-              Be among the first to access our powerful analytics dashboard. Get exclusive early access to advanced financial visualizations and insights tailored for tax professionals.
+              Be among the first to access our powerful analytics dashboard. Get exclusive early access to advanced financial visualizations and insights tailored for tax professionals. All paid plans now include document upload capabilities!
             </p>
             
             {isSubmitted ? (

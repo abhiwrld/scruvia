@@ -55,7 +55,21 @@ export default function PricingPage() {
         return;
       }
       
-      // User is logged in, proceed with upgrade
+      // Check if phone is verified for premium plans
+      const userData = JSON.parse(user);
+      if ((plan === 'pro' || plan === 'team' || plan === 'plus') && !userData.phoneVerified) {
+        // Redirect to profile with verification tab if phone not verified
+        setLoading(false);
+        // Save the plan they wanted to upgrade to in localStorage
+        localStorage.setItem('pendingUpgradePlan', plan);
+        // Set notification in localStorage to show on profile page
+        localStorage.setItem('profileVerificationNeeded', 'true');
+        // Redirect to profile page verification tab
+        router.push('/profile');
+        return;
+      }
+      
+      // User is logged in and verified (if needed), proceed with upgrade
       await completeUpgrade(plan);
     } catch (err) {
       console.error('Error updating plan:', err);
@@ -286,6 +300,12 @@ export default function PricingPage() {
                     </svg>
                     <span className="text-gray-300">Document history</span>
                   </li>
+                  <li className="flex items-start">
+                    <svg className="h-6 w-6 text-[#00c8ff] mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">Unlimited document uploads</span>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -344,6 +364,12 @@ export default function PricingPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     <span className="text-gray-300">Advanced document analysis</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-6 w-6 text-[#00c8ff] mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">Unlimited document uploads</span>
                   </li>
                   <li className="flex items-start">
                     <svg className="h-6 w-6 text-[#00c8ff] mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -420,6 +446,12 @@ export default function PricingPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                     <span className="text-gray-300">Advanced security features with SSO integration</span>
+                  </li>
+                  <li className="flex items-start">
+                    <svg className="h-6 w-6 text-[#00c8ff] mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-gray-300">Unlimited document uploads</span>
                   </li>
                 </ul>
               </div>

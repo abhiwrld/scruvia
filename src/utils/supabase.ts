@@ -119,6 +119,70 @@ export async function getCurrentUser() {
   }
 }
 
+// Function to get all files uploaded by a user
+export async function getUserFiles(userId: string) {
+  try {
+    console.log('Fetching files for user:', userId);
+    
+    // First fetch the file metadata from the files table
+    const { data, error } = await supabase
+      .from('files')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logSupabaseError('Error fetching user files', error);
+      return [];
+    }
+
+    // Enhance file entries with complete URLs and any additional storage info
+    if (data && data.length > 0) {
+      return data.map(file => ({
+        ...file,
+        // Add any additional transformations or computed properties here
+        created_at_formatted: file.created_at ? new Date(file.created_at as string).toLocaleString() : 'Unknown date'
+      }));
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('Exception in getUserFiles:', err);
+    return [];
+  }
+}
+
+// Function to delete a user file
+export async function deleteUserFile(fileId: string, filePath: string) {
+  try {
+    // First delete file from storage
+    const { error: storageError } = await supabase.storage
+      .from('user_files')
+      .remove([filePath]);
+      
+    if (storageError) {
+      logSupabaseError('Error deleting file from storage', storageError);
+      throw storageError;
+    }
+    
+    // Then remove the file record from the database
+    const { error: dbError } = await supabase
+      .from('files')
+      .delete()
+      .eq('id', fileId);
+      
+    if (dbError) {
+      logSupabaseError('Error deleting file record from database', dbError);
+      throw dbError;
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Exception in deleteUserFile:', err);
+    throw err;
+  }
+}
+
 // Function to fix column name discrepancy in a profile
 function normalizeProfileColumns(profile: any) {
   if (!profile) return profile;

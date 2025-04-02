@@ -12,6 +12,13 @@ export const MODEL_DISPLAY_NAMES: Record<PerplexityModel, string> = {
   'sonar-reasoning-pro': 'ScruviaAI Pro'
 };
 
+// File content types for API
+export interface FileContent {
+  fileName: string;
+  content: string;
+  fileType: string;
+}
+
 // Request options interface
 export interface PerplexityRequestOptions {
   model: PerplexityModel;
@@ -179,14 +186,33 @@ export async function queryPerplexity(
   model: PerplexityModel = 'sonar',
   previousMessages: { role: 'user' | 'assistant'; content: string }[] = [],
   stream = false,
-  onChunk?: (chunk: string) => void
+  onChunk?: (chunk: string) => void,
+  fileContents?: FileContent[]
 ) {
   try {
+    // Prepare system message with file content if available
+    let systemInstruction = DEFAULT_SYSTEM_INSTRUCTION;
+    
+    // If file contents are provided, include them in the system instruction
+    if (fileContents && fileContents.length > 0) {
+      systemInstruction += '\n\nThe user has uploaded the following files. Use this information to answer their questions:\n\n';
+      
+      // Add each file content to the system instruction
+      fileContents.forEach((file, index) => {
+        systemInstruction += `FILE ${index + 1}: ${file.fileName} (${file.fileType})\n`;
+        systemInstruction += '```\n';
+        systemInstruction += file.content.substring(0, 100000); // Limit content size to avoid token limits
+        systemInstruction += '\n```\n\n';
+      });
+      
+      systemInstruction += "Please use the information from these files to provide accurate responses to the user's questions.";
+    }
+    
     // Create initial messages array with system instruction
     const initialMessages = [
       {
         role: 'system' as const,
-        content: DEFAULT_SYSTEM_INSTRUCTION
+        content: systemInstruction
       },
       ...previousMessages
     ];

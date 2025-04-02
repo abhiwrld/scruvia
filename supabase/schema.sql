@@ -49,6 +49,24 @@ CREATE TABLE IF NOT EXISTS public.usage_logs (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- Create files table to track uploaded files
+CREATE TABLE IF NOT EXISTS files (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  file_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_type TEXT NOT NULL,
+  file_size BIGINT NOT NULL,
+  public_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create storage bucket for file uploads
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('user_files', 'user_files', true)
+ON CONFLICT (id) DO NOTHING;
+
 -- Fix any column naming issues in the profiles table
 DO $$
 DECLARE
@@ -89,6 +107,7 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usage_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE files ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for profiles table
 DO $$
@@ -245,6 +264,103 @@ BEGIN
         CREATE POLICY "Admin can do anything" ON public.usage_logs
         USING (true)
         WITH CHECK (true);
+    END IF;
+END
+$$;
+
+-- Create policies for files table
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'files' 
+        AND policyname = 'Users can view their own files'
+    ) THEN
+        CREATE POLICY "Users can view their own files" ON files FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'files' 
+        AND policyname = 'Users can insert their own files'
+    ) THEN
+        CREATE POLICY "Users can insert their own files" ON files FOR INSERT WITH CHECK (auth.uid() = user_id);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'files' 
+        AND policyname = 'Users can delete their own files'
+    ) THEN
+        CREATE POLICY "Users can delete their own files" ON files FOR DELETE USING (auth.uid() = user_id);
+    END IF;
+END
+$$;
+
+-- Storage security policies
+-- Allow authenticated users to upload files to their own folder
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'storage.objects' 
+        AND policyname = 'Allow users to upload files to their own folder'
+    ) THEN
+        CREATE POLICY "Allow users to upload files to their own folder"
+        ON storage.objects FOR INSERT
+        TO authenticated
+        WITH CHECK (
+          -- Must be authenticated
+          auth.role() = 'authenticated' 
+          -- Path must start with user's ID
+          AND (storage.foldername(name))[1] = auth.uid()::text
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'storage.objects' 
+        AND policyname = 'Allow users to view their own files'
+    ) THEN
+        CREATE POLICY "Allow users to view their own files"
+        ON storage.objects FOR SELECT
+        TO authenticated
+        USING (
+          -- Must be authenticated
+          auth.role() = 'authenticated' 
+          -- Path must start with user's ID
+          AND (storage.foldername(name))[1] = auth.uid()::text
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'storage.objects' 
+        AND policyname = 'Allow public to view files'
+    ) THEN
+        CREATE POLICY "Allow public to view files"
+        ON storage.objects FOR SELECT
+        TO anon
+        USING (
+          -- Allow any public access to the user_files bucket
+          bucket_id = 'user_files'
+        );
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'storage.objects' 
+        AND policyname = 'Allow users to delete their own files'
+    ) THEN
+        CREATE POLICY "Allow users to delete their own files"
+        ON storage.objects FOR DELETE
+        TO authenticated
+        USING (
+          -- Must be authenticated
+          auth.role() = 'authenticated' 
+          -- Path must start with user's ID
+          AND (storage.foldername(name))[1] = auth.uid()::text
+        );
     END IF;
 END
 $$;

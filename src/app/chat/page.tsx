@@ -19,7 +19,11 @@ import ThinkingContent from '@/app/components/ThinkingContent';
 import { useAuth } from '@/context/AuthContext';
 import { saveChat, getChats, incrementQuestionCount } from '@/utils/supabase';
 import type { DetailedHTMLProps, TableHTMLAttributes, HTMLAttributes } from 'react';
+import { getModelForPlan, canUploadFiles, getMaxFileSizeForPlan } from '@/utils/plans';
+import FullScreenModal from '../components/FullScreenModal';
+import FileUpload from '../components/FileUpload';
 
+// Define Message type
 type Message = {
   id: string;
   content: string;
@@ -46,6 +50,16 @@ interface CodeBlockProps {
 const CHAT_STORAGE_KEY = 'scruvia_active_chat';
 const MESSAGES_STORAGE_KEY = 'scruvia_chat_messages';
 
+// Import file parser dynamically to avoid server-side issues
+const extractTextFromFile = async (file: File, fileUrl: string): Promise<string> => {
+  if (typeof window !== 'undefined') {
+    // Only import on client side
+    const { extractTextFromFile } = await import('@/utils/file-parser');
+    return extractTextFromFile(file, fileUrl);
+  }
+  return "File extraction is only available in browser environments.";
+};
+
 export default function ChatPage() {
   const router = useRouter();
   const { user, profile, plan, isLoading } = useAuth();
@@ -65,6 +79,9 @@ export default function ChatPage() {
 
   // Show loading state while auth is being checked
   const [bypassAuthLoading, setBypassAuthLoading] = useState(false);
+  
+  // Track file upload state to prevent chat refresh issues
+  const [fileContentsLoaded, setFileContentsLoaded] = useState(false);
   
   // Add a timeout to bypass loading screen if it takes too long
   useEffect(() => {
@@ -261,6 +278,12 @@ export default function ChatPage() {
   
   // Check if we're viewing a specific chat
   useEffect(() => {
+    // Skip this effect if files were just uploaded - prevents chat reset after file upload
+    if (fileContentsLoaded) {
+      console.log('Files were uploaded, skipping chat reset/redirection');
+      return;
+    }
+    
     const chatId = params?.id as string;
     
     if (chatId && user) {
@@ -305,7 +328,7 @@ export default function ChatPage() {
       
       setMessages([welcomeMessage]);
     }
-  }, [params, user, router, activeChatId, messages.length]);
+  }, [params, user, router, activeChatId, messages.length, fileContentsLoaded]);
   
   // Set the model based on user's plan
   useEffect(() => {
@@ -470,6 +493,19 @@ export default function ChatPage() {
           model: selectedModel
         });
         
+        // Increment the question count in Supabase and update local state
+        const success = await incrementQuestionCount(user.id);
+        if (success) {
+          // Update local question count to reflect the increment
+          setQuestionsRemaining(prevCount => Math.max(0, prevCount - 1));
+        }
+        
+        // Reset fileContentsLoaded flag after successful message
+        if (fileContentsLoaded) {
+          console.log('File contents were used in this message, resetting upload state');
+          setFileContentsLoaded(false);
+        }
+        
         return;
       }
       
@@ -507,7 +543,7 @@ export default function ChatPage() {
         // Track the stream content for debugging
         let streamContent = '';
         
-        // Stream response from Perplexity API
+        // Stream response from Perplexity API with file contents if available
         const response = await queryPerplexity(
           input, 
           selectedModel, 
@@ -530,7 +566,9 @@ export default function ChatPage() {
               
               return updatedMsgs;
             });
-          }
+          },
+          // Pass file contents to the API if available
+          fileContents.length > 0 ? fileContents : undefined
         );
         
         if (response) {
@@ -570,6 +608,12 @@ export default function ChatPage() {
           if (success) {
             // Update local question count to reflect the increment
             setQuestionsRemaining(prevCount => Math.max(0, prevCount - 1));
+          }
+          
+          // Reset fileContentsLoaded flag after successful message
+          if (fileContentsLoaded) {
+            console.log('File contents were used in this message, resetting upload state');
+            setFileContentsLoaded(false);
           }
           
           // Set active citations for sidebar if available
@@ -716,6 +760,238 @@ export default function ChatPage() {
       e.preventDefault();
       handleSendMessage();
     }
+  };
+
+  // Add state for file upload UI and errors
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [fileUploadError, setFileUploadError] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{url: string; name: string; type: string}>>([]);
+  const [fileContents, setFileContents] = useState<Array<{fileName: string; content: string; fileType: string}>>([]);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+
+  // Add the file upload functions
+  // After the input area in the chat UI, add this component:
+  const renderFileUploadSection = () => {
+    // Only show for Pro/Team users
+    if (!user || !plan || !canUploadFiles(plan)) {
+      return null;
+    }
+
+    return (
+      <div className="mt-4 border-t border-gray-800 pt-4">
+        {!showFileUpload ? (
+          <button
+            onClick={() => setShowFileUpload(true)}
+            className="flex items-center text-sm text-gray-400 hover:text-white"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+            Attach files
+          </button>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-medium text-gray-300">
+                {isProcessingFile ? 'Processing File...' : 'Upload File'}
+              </h3>
+              <button
+                onClick={() => setShowFileUpload(false)}
+                className="text-gray-500 hover:text-gray-300"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {isProcessingFile ? (
+              <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-600 rounded-lg">
+                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#9c6bff]"></div>
+                <p className="mt-4 text-sm text-gray-300">Extracting content from file...</p>
+              </div>
+            ) : (
+              <FileUpload
+                userId={user.id}
+                onUploadComplete={async (fileUrl, fileName, fileType) => {
+                  // Add file to uploadedFiles state
+                  const newFile = { url: fileUrl, name: fileName, type: fileType };
+                  setUploadedFiles(prev => [...prev, newFile]);
+                  
+                  // Show processing state
+                  setIsProcessingFile(true);
+                  
+                  try {
+                    // Create a temporary File object to pass to the parser
+                    const file = new File([new Blob()], fileName, { type: fileType });
+                    
+                    // Show processing indicator while extracting content
+                    console.log(`Processing file: ${fileName}`);
+                    
+                    // Extract text content from the file using the URL directly
+                    const content = await extractTextFromFile(file, fileUrl);
+                    
+                    console.log(`Extracted ${content.length} characters from ${fileName}`);
+                    
+                    // Add the extracted content to fileContents state
+                    setFileContents(prev => [
+                      ...prev, 
+                      { 
+                        fileName: fileName,
+                        content: content,
+                        fileType: fileType
+                      }
+                    ]);
+                    
+                    // Flag that file contents have been loaded - prevents chat reset
+                    setFileContentsLoaded(true);
+                    
+                    // Hide processing state and file upload UI
+                    setIsProcessingFile(false);
+                    setShowFileUpload(false);
+                    
+                    // File upload complete - no modal needed
+                  } catch (error) {
+                    console.error('Error processing file:', error);
+                    setFileUploadError('Error processing file. Please try again.');
+                    setIsProcessingFile(false);
+                  }
+                }}
+                onUploadError={(error) => {
+                  setFileUploadError(error);
+                }}
+                maxSizeMB={getMaxFileSizeForPlan(plan)}
+              />
+            )}
+            
+            {fileUploadError && (
+              <p className="text-red-500 text-xs mt-1">{fileUploadError}</p>
+            )}
+          </div>
+        )}
+        
+        {uploadedFiles.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-xs font-medium text-gray-400 mb-2">Uploaded Files:</h4>
+            <ul className="space-y-2">
+              {uploadedFiles.map((file, index) => (
+                <li key={index} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center text-blue-400 hover:text-blue-300">
+                    <svg className="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="truncate">
+                      {file.name}
+                    </a>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      // Remove file from uploadedFiles and fileContents
+                      setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+                      setFileContents(prev => prev.filter((_, i) => i !== index));
+                    }}
+                    className="ml-2 p-1 text-gray-400 hover:text-red-400 hover:bg-gray-700/50 rounded-full"
+                    title="Remove file"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Add the renderFileUploadUI function
+  const renderFileUploadUI = () => {
+    if (!user || !plan || !canUploadFiles(plan)) {
+      return null;
+    }
+
+    return (
+      <div className="p-4 bg-gray-800/60 backdrop-blur-sm border border-gray-700 rounded-lg mt-2">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-sm font-medium text-gray-300">
+            {isProcessingFile ? 'Processing File...' : 'Upload File'}
+          </h3>
+          <button
+            onClick={() => setShowFileUpload(false)}
+            className="text-gray-500 hover:text-gray-300"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        {isProcessingFile ? (
+          <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-gray-600 rounded-lg">
+            <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-[#9c6bff]"></div>
+            <p className="mt-4 text-sm text-gray-300">Extracting content from file...</p>
+          </div>
+        ) : (
+          <FileUpload
+            userId={user.id}
+            onUploadComplete={async (fileUrl, fileName, fileType) => {
+              // Add file to uploadedFiles state
+              const newFile = { url: fileUrl, name: fileName, type: fileType };
+              setUploadedFiles(prev => [...prev, newFile]);
+              
+              // Show processing state
+              setIsProcessingFile(true);
+              
+              try {
+                // Create a temporary File object to pass to the parser
+                const file = new File([new Blob()], fileName, { type: fileType });
+                
+                // Show processing indicator while extracting content
+                console.log(`Processing file: ${fileName}`);
+                
+                // Extract text content from the file using the URL directly
+                const content = await extractTextFromFile(file, fileUrl);
+                
+                console.log(`Extracted ${content.length} characters from ${fileName}`);
+                
+                // Add the extracted content to fileContents state
+                setFileContents(prev => [
+                  ...prev, 
+                  { 
+                    fileName: fileName,
+                    content: content,
+                    fileType: fileType
+                  }
+                ]);
+                
+                // Flag that file contents have been loaded - prevents chat reset
+                setFileContentsLoaded(true);
+                
+                // Hide processing state and file upload UI
+                setIsProcessingFile(false);
+                setShowFileUpload(false);
+                
+                // File upload complete - no modal needed
+              } catch (error) {
+                console.error('Error processing file:', error);
+                setFileUploadError('Error processing file. Please try again.');
+                setIsProcessingFile(false);
+              }
+            }}
+            onUploadError={(error) => {
+              setFileUploadError(error);
+            }}
+            maxSizeMB={getMaxFileSizeForPlan(plan)}
+          />
+        )}
+        
+        {fileUploadError && (
+          <p className="text-red-500 text-xs mt-1">{fileUploadError}</p>
+        )}
+      </div>
+    );
   };
 
   // Show loading state while auth is being checked
@@ -989,7 +1265,47 @@ export default function ChatPage() {
             {/* Input area - Floating design */}
             <div className="py-4 px-4 relative">
               <div className="w-full max-w-4xl mx-auto bg-gray-800/70 backdrop-blur-md rounded-xl shadow-lg border border-gray-700/50 hover:border-gray-600/50 transition-all">
-                <div className="flex items-end">
+                {/* Uploaded files display */}
+                {uploadedFiles.length > 0 && (
+                  <div className="px-4 pt-3 pb-2 border-b border-gray-700/50">
+                    <div className="flex flex-wrap gap-2">
+                      {uploadedFiles.map((file, index) => (
+                        <div key={index} className="flex items-center bg-gray-700/40 rounded-full pl-2 pr-1 py-1 text-xs text-gray-200">
+                          <svg className="w-3 h-3 text-blue-400 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <span className="truncate max-w-[100px]">{file.name}</span>
+                          <button 
+                            onClick={() => {
+                              setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+                              setFileContents(prev => prev.filter((_, i) => i !== index));
+                            }}
+                            className="ml-1 p-1 text-gray-400 hover:text-white rounded-full"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex items-center">
+                  {/* File attachment button - only show for paid plans and when not streaming */}
+                  {user && plan && canUploadFiles(plan) && !isStreaming && (
+                    <button
+                      onClick={() => setShowFileUpload(!showFileUpload)}
+                      className="p-3 ml-2 text-gray-400 hover:text-gray-200"
+                      title="Attach files"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                      </svg>
+                    </button>
+                  )}
+                  
                   <textarea
                     className="flex-1 bg-transparent border-0 focus:ring-0 text-white placeholder-gray-400 p-4 pr-12 resize-none h-[60px] max-h-[200px] overflow-y-auto"
                     placeholder="Ask about Indian tax laws, regulations, or get filing advice..."
@@ -999,8 +1315,9 @@ export default function ChatPage() {
                     rows={1}
                     disabled={isStreaming}
                   />
+                  
                   <button
-                    className={`p-3 mr-2 mb-2 rounded-lg ${
+                    className={`p-3 mr-2 rounded-lg ${
                       isStreaming || !input.trim()
                         ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
                         : 'bg-gradient-to-r from-[#9c6bff] to-[#00c8ff] text-white hover:opacity-90'
@@ -1015,19 +1332,22 @@ export default function ChatPage() {
                     )}
                   </button>
                 </div>
-                
-                {plan === 'free' && (
-                  <div className="text-xs text-gray-400 pb-2 px-4 flex justify-between">
-                    <span>
-                      {questionsRemaining} of 10 free questions remaining
-                    </span>
-                    <Link href="/pricing" className="text-[#00c8ff] hover:underline">
-                      Upgrade for unlimited
-                    </Link>
-                  </div>
-                )}
               </div>
             </div>
+
+            {/* Render file upload UI when showFileUpload is true */}
+            {showFileUpload && renderFileUploadUI()}
+
+            {plan === 'free' && (
+              <div className="text-xs text-gray-400 pb-2 px-4 flex justify-between">
+                <span>
+                  {questionsRemaining} of 10 free questions remaining
+                </span>
+                <Link href="/pricing" className="text-[#00c8ff] hover:underline">
+                  Upgrade for unlimited
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Web search results sidebar */}

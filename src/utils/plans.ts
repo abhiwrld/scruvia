@@ -1,5 +1,7 @@
 // Plan types and utilities for Scruvia
 
+import { PerplexityModel } from './perplexity-api';
+
 // All available plans in the application
 export type PlanType = 'free' | 'plus' | 'pro' | 'team';
 
@@ -11,6 +13,10 @@ export interface PlanConfig {
   price: number; // In INR
   features: string[];
   modelAccess: 'base' | 'pro';
+  model: PerplexityModel;
+  canUploadFiles: boolean;
+  maxFileSize: number; // in MB, 0 means unlimited
+  description: string;
 }
 
 // Define the plan configurations
@@ -25,7 +31,11 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       'Base model access',
       'Web search sources',
     ],
-    modelAccess: 'base'
+    modelAccess: 'base',
+    model: 'sonar',
+    canUploadFiles: false,
+    maxFileSize: 0,
+    description: 'Basic AI-powered tax assistance'
   },
   plus: {
     name: 'plus',
@@ -37,37 +47,49 @@ export const PLANS: Record<PlanType, PlanConfig> = {
       'Document history',
       'Base model access',
       'Web search sources',
+      'Unlimited file uploads',
     ],
-    modelAccess: 'base'
+    modelAccess: 'base',
+    model: 'sonar',
+    canUploadFiles: true,
+    maxFileSize: 0, // 0 means unlimited
+    description: 'More comprehensive tax and financial assistance'
   },
   pro: {
-    name: 'pro',
+    name: 'Pro',
     displayName: 'Pro',
-    questionLimit: 200,
+    questionLimit: 2000,
     price: 1999,
     features: [
+      'Unlimited conversations',
+      'Advanced tax analysis',
       'Priority support',
-      'Advanced document analysis',
-      'Custom tax templates',
-      'Pro model access',
       'Web search sources',
+      'Unlimited file uploads',
     ],
-    modelAccess: 'pro'
+    modelAccess: 'pro',
+    model: 'sonar-reasoning-pro',
+    canUploadFiles: true,
+    maxFileSize: 0, // 0 means unlimited
+    description: 'Advanced AI-powered tax and financial assistance'
   },
   team: {
-    name: 'team',
+    name: 'Team',
     displayName: 'Team',
-    questionLimit: 500,
+    questionLimit: 5000,
     price: 2499,
     features: [
-      'Pro model access for all team members',
-      'Collaborative workspace',
-      'Admin dashboard',
-      'Advanced security features',
+      'Unlimited conversations',
+      'Advanced tax analysis',
       'Priority support',
       'Web search sources',
+      'Unlimited file uploads',
     ],
-    modelAccess: 'pro'
+    modelAccess: 'pro',
+    model: 'sonar-reasoning-pro',
+    canUploadFiles: true,
+    maxFileSize: 0, // 0 means unlimited
+    description: 'Collaborative workspace with shared documents'
   }
 };
 
@@ -117,6 +139,24 @@ export function isValidPlan(plan: string | undefined): boolean {
  */
 export function getAllPlans(): PlanConfig[] {
   return Object.values(PLANS);
+}
+
+// Helper functions
+
+// Check if the user's plan allows file uploads
+export function canUploadFiles(plan: PlanType): boolean {
+  return PLANS[plan]?.canUploadFiles || false;
+}
+
+// Get the maximum file size allowed for the plan (in MB)
+export function getMaxFileSizeForPlan(plan: PlanType): number {
+  // All paid plans have unlimited uploads now, so returning a large value
+  return 100; // 100MB as a reasonable limit for individual files
+}
+
+// Get plan description
+export function getPlanDescription(plan: PlanType): string {
+  return PLANS[plan]?.description || 'Basic plan';
 }
 
 export default PLANS; 
