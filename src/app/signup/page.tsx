@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { detectLocalStorageClearing } from '@/utils/supabase';
+import FullScreenModal from '../components/FullScreenModal';
 
 export default function SignupPage() {
   const [name, setName] = useState('');
@@ -15,6 +16,7 @@ export default function SignupPage() {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const router = useRouter();
   const { user, signUp, isLoading } = useAuth();
 
@@ -55,9 +57,8 @@ export default function SignupPage() {
       // Register user with Supabase
       await signUp(email, password);
       
-      // Display success message and redirect to login
-      alert('Registration successful! Please check your email to confirm your account, then login.');
-      router.push('/login');
+      // Show success modal instead of alert
+      setShowSuccessModal(true);
     } catch (err: any) {
       console.error('Signup error:', err);
       setError(err.message || 'Failed to create account. Please try again.');
@@ -86,6 +87,19 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-[#0c1220] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      {showSuccessModal && (
+        <FullScreenModal
+          title="Registration Successful!"
+          message="Thank you for signing up with Scruvia AI. Please check your email to confirm your account, then login."
+          type="success"
+          onClose={() => {
+            setShowSuccessModal(false);
+            router.push('/login');
+          }}
+          buttonText="Go to Login"
+        />
+      )}
+      
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <h1 className="text-center text-3xl font-bold">
           <span className="bg-gradient-to-r from-[#9c6bff] to-[#00c8ff] bg-clip-text text-transparent">
