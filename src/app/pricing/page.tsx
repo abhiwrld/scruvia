@@ -31,8 +31,20 @@ export default function PricingPage() {
     setLoading(true);
     
     try {
-      // For demo purposes, we'll skip phone verification
-      // In a real app, you would implement proper phone verification
+      // Check if user is logged in by checking localStorage
+      const user = localStorage.getItem('user');
+      
+      if (!user) {
+        // User is not logged in, redirect to login
+        setLoading(false);
+        // Save the plan they wanted to upgrade to in localStorage
+        localStorage.setItem('pendingUpgradePlan', plan);
+        // Redirect to login page
+        router.push('/login?returnTo=/pricing');
+        return;
+      }
+      
+      // User is logged in, proceed with upgrade
       await completeUpgrade(plan);
     } catch (err) {
       console.error('Error updating plan:', err);

@@ -1,5 +1,8 @@
 // Perplexity API integration for Scruvia
 
+// Add this import at the top of the file, with other imports
+import { getModelForPlan } from './plans';
+
 // Model options
 export type PerplexityModel = 'sonar' | 'sonar-reasoning-pro';
 
@@ -502,15 +505,7 @@ export async function queryPerplexity(
 
 // Function to determine which model to use based on user's plan
 export function getModelForUserPlan(plan: string | undefined): PerplexityModel {
-  switch (plan) {
-    case 'pro':
-    case 'team':
-      return 'sonar-reasoning-pro';
-    case 'plus':
-    case 'free':
-    default:
-      return 'sonar';
-  }
+  return getModelForPlan(plan) as PerplexityModel;
 }
 
 // Get display name for a model

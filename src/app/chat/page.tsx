@@ -42,6 +42,10 @@ interface CodeBlockProps {
   value: string;
 }
 
+// Add constants for local storage keys
+const CHAT_STORAGE_KEY = 'scruvia_active_chat';
+const MESSAGES_STORAGE_KEY = 'scruvia_chat_messages';
+
 export default function ChatPage() {
   const router = useRouter();
   const { user, profile, plan, isLoading } = useAuth();
@@ -73,6 +77,85 @@ export default function ChatPage() {
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
+  
+  // Save active chat to localStorage when available
+  useEffect(() => {
+    if (activeChatId && messages.length > 0) {
+      try {
+        localStorage.setItem(CHAT_STORAGE_KEY, activeChatId);
+        localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages));
+        console.log('Saved chat state to localStorage', { activeChatId, messageCount: messages.length });
+      } catch (error) {
+        console.error('Error saving chat to localStorage:', error);
+      }
+    }
+  }, [activeChatId, messages]);
+
+  // Handle beforeunload event to save chat state
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Ensure the latest chat state is saved before the page unloads
+      if (activeChatId && messages.length > 0) {
+        try {
+          localStorage.setItem(CHAT_STORAGE_KEY, activeChatId);
+          localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messages));
+        } catch (error) {
+          console.error('Error saving chat before unload:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [activeChatId, messages]);
+
+  // Handle visibility change to restore chat when tab becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        console.log('Tab became visible, checking chat state');
+        const chatId = params?.id as string;
+        
+        // If we have a chat ID in the URL but no messages, try to reload from localStorage first
+        if (chatId && messages.length === 0) {
+          try {
+            const storedChatId = localStorage.getItem(CHAT_STORAGE_KEY);
+            const storedMessages = localStorage.getItem(MESSAGES_STORAGE_KEY);
+            
+            // Only restore from localStorage if the stored chat matches the current URL
+            if (storedChatId === chatId && storedMessages) {
+              const parsedMessages = JSON.parse(storedMessages) as Message[];
+              
+              if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+                console.log('Restoring chat from localStorage on visibility change', { 
+                  chatId,
+                  messageCount: parsedMessages.length 
+                });
+                
+                setMessages(parsedMessages);
+                return; // Skip database load if we have local data
+              }
+            }
+          } catch (error) {
+            console.error('Error restoring from localStorage on visibility change:', error);
+          }
+          
+          // If localStorage restore failed or data didn't match, load from database
+          console.log('Loading chat history from database on visibility change:', chatId);
+          loadChatHistory(chatId);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [params, user, messages.length]);
   
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -179,19 +262,50 @@ export default function ChatPage() {
   // Check if we're viewing a specific chat
   useEffect(() => {
     const chatId = params?.id as string;
+    
     if (chatId && user) {
-      setActiveChatId(chatId);
-      loadChatHistory(chatId);
+      // Only load history if we haven't already loaded this chat
+      if (chatId !== activeChatId || messages.length === 0) {
+        console.log('Loading chat history for new chat ID:', chatId);
+        setActiveChatId(chatId);
+        loadChatHistory(chatId);
+      }
     } else if (user && !params?.id) {
-      // If no specific chat ID, initialize with welcome message
-      setMessages([{
+      // If no specific chat ID in URL, check if we have a stored chat
+      try {
+        const storedChatId = localStorage.getItem(CHAT_STORAGE_KEY);
+        const storedMessages = localStorage.getItem(MESSAGES_STORAGE_KEY);
+        
+        if (storedChatId && storedMessages) {
+          const parsedMessages = JSON.parse(storedMessages) as Message[];
+          
+          if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
+            console.log('Restoring chat from localStorage for home page', { 
+              chatId: storedChatId, 
+              messageCount: parsedMessages.length 
+            });
+            
+            // Redirect to the stored chat
+            router.push(`/chat/${storedChatId}`);
+            return; // Skip welcome message creation
+          }
+        }
+      } catch (error) {
+        console.error('Error checking stored chat on home page:', error);
+      }
+      
+      // If no stored chat or restoration failed, initialize with welcome message
+      console.log('No stored chat found, initializing with welcome message');
+      const welcomeMessage = {
         id: uuidv4(),
         content: "Hello! I'm Scruvia AI. How can I help you with your taxation and financial analytics questions today?",
-        role: 'assistant',
+        role: 'assistant' as const,
         timestamp: new Date().toISOString()
-      }]);
+      };
+      
+      setMessages([welcomeMessage]);
     }
-  }, [params, user]);
+  }, [params, user, router, activeChatId, messages.length]);
   
   // Set the model based on user's plan
   useEffect(() => {
@@ -211,14 +325,88 @@ export default function ChatPage() {
       const currentChat = chats.find(chat => chat.id === chatId);
       
       if (currentChat && currentChat.messages) {
-        setMessages(currentChat.messages);
+        // Ensure messages are of the correct type before setting
+        if (Array.isArray(currentChat.messages)) {
+          // Validate the message structure to ensure it meets the Message type requirements
+          const validMessages = currentChat.messages.filter(msg => 
+            msg && 
+            typeof msg === 'object' && 
+            'id' in msg && 
+            'content' in msg && 
+            'role' in msg && 
+            (msg.role === 'user' || msg.role === 'assistant') &&
+            'timestamp' in msg
+          );
+          
+          if (validMessages.length > 0) {
+            console.log(`Loaded ${validMessages.length} valid messages for chat ${chatId}`);
+            setMessages(validMessages as Message[]);
+            
+            // Also update localStorage
+            try {
+              localStorage.setItem(CHAT_STORAGE_KEY, chatId);
+              localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(validMessages));
+            } catch (error) {
+              console.error('Error saving loaded chat to localStorage:', error);
+            }
+          } else {
+            console.log("No valid messages found in chat:", chatId);
+            setMessages([]);
+          }
+        } else {
+          console.log("Chat messages are not in expected format:", currentChat.messages);
+          setMessages([]);
+        }
       } else {
-        console.error("Chat not found:", chatId);
-        // Redirect to main chat page if chat doesn't exist
-        router.push('/chat');
+        console.log("Chat not found:", chatId);
+        // Create a new welcome message
+        const welcomeMessage = {
+          id: uuidv4(),
+          content: "Hello! I'm Scruvia AI. How can I help you with your taxation and financial analytics questions today?",
+          role: 'assistant' as const,
+          timestamp: new Date().toISOString()
+        };
+        
+        setMessages([welcomeMessage]);
+        
+        // Save this new chat ID and messages to localStorage
+        try {
+          localStorage.setItem(CHAT_STORAGE_KEY, chatId);
+          localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify([welcomeMessage]));
+        } catch (error) {
+          console.error('Error saving new welcome message to localStorage:', error);
+        }
+        
+        // Save the new chat to Supabase so it exists for next time
+        await saveChat({
+          id: chatId,
+          title: "New Conversation",
+          messages: [welcomeMessage],
+          user_id: user.id,
+          model: selectedModel
+        });
       }
     } catch (error) {
       console.error("Error loading chat history:", error);
+      // Handle the error gracefully - create a new welcome message
+      const welcomeMessage = {
+        id: uuidv4(),
+        content: "Sorry, there was an issue loading your chat history. How can I help you today?",
+        role: 'assistant' as const,
+        timestamp: new Date().toISOString()
+      };
+      
+      setMessages([welcomeMessage]);
+    }
+  };
+
+  // After the final message is saved to Supabase in handleSendMessage
+  const saveToLocalStorage = (chatId: string, messagesData: Message[]) => {
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, chatId);
+      localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify(messagesData));
+    } catch (error) {
+      console.error('Error saving chat to localStorage:', error);
     }
   };
 
@@ -242,6 +430,9 @@ export default function ChatPage() {
       
       const updatedMessages = [...messages, userMessage];
       setMessages(updatedMessages);
+      
+      // Save to localStorage immediately after adding user message
+      saveToLocalStorage(currentChatId, updatedMessages);
       
       // Clear input and update UI
       setInput('');
@@ -267,6 +458,9 @@ export default function ChatPage() {
         const finalMessages = [...updatedMessages, limitMessage];
         setMessages(finalMessages);
         
+        // Save to localStorage
+        saveToLocalStorage(currentChatId, finalMessages);
+        
         // Save to Supabase
         await saveChat({
           id: currentChatId,
@@ -290,7 +484,12 @@ export default function ChatPage() {
       };
       
       // Add the placeholder message to state
-      setMessages([...updatedMessages, placeholderMessage]);
+      const messagesWithPlaceholder = [...updatedMessages, placeholderMessage];
+      setMessages(messagesWithPlaceholder);
+      
+      // Save to localStorage with placeholder
+      saveToLocalStorage(currentChatId, messagesWithPlaceholder);
+      
       setIsStreaming(true);
       
       // Clear any previous sources when starting a new message
@@ -317,13 +516,20 @@ export default function ChatPage() {
           (chunk) => {
             // Safely update the streaming message with each chunk
             streamContent += chunk;
-            setMessages((prevMessages: Message[]) => 
-              prevMessages.map(msg => 
+            setMessages((prevMessages: Message[]) => {
+              const updatedMsgs = prevMessages.map(msg => 
                 msg.id === placeholderId 
                   ? { ...msg, content: streamContent } 
                   : msg
-              )
-            );
+              );
+              
+              // Update localStorage periodically during streaming (not on every chunk to avoid performance issues)
+              if (Math.random() < 0.1) { // ~10% chance to update localStorage during streaming
+                saveToLocalStorage(currentChatId, updatedMsgs);
+              }
+              
+              return updatedMsgs;
+            });
           }
         );
         
@@ -346,6 +552,9 @@ export default function ChatPage() {
           
           const finalMessages = updatedMessages.concat([finalAssistantMessage]);
           setMessages(finalMessages);
+          
+          // Save final message state to localStorage
+          saveToLocalStorage(currentChatId, finalMessages);
           
           // Save the chat to Supabase
           await saveChat({
@@ -479,6 +688,14 @@ export default function ChatPage() {
     
     // Reset messages
     setMessages([welcomeMessage]);
+    
+    // Update local storage with new chat
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, newChatId);
+      localStorage.setItem(MESSAGES_STORAGE_KEY, JSON.stringify([welcomeMessage]));
+    } catch (error) {
+      console.error('Error saving new chat to localStorage:', error);
+    }
     
     // Save new chat to Supabase
     await saveChat({

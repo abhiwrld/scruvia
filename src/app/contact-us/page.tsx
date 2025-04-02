@@ -74,7 +74,7 @@ export default function ContactUs() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
         {/* Contact Information */}
         <div className="bg-gradient-to-br from-primary/10 to-secondary/10 p-8 rounded-2xl">
-          <h2 className="text-2xl font-semibold mb-6">Get in Touch</h2>
+          <h2 className="text-2xl font-semibold mb-6 md:mt-0">Get in Touch</h2>
           
           <div className="space-y-6">
             <div className="flex items-start">
@@ -85,6 +85,21 @@ export default function ContactUs() {
                 <h3 className="font-medium">Email Us</h3>
                 <p className="text-gray-600 mt-1">support@scruvia.com</p>
                 <p className="text-sm text-gray-500 mt-2">We aim to respond to all inquiries within 24 hours.</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start">
+              <svg className="h-6 w-6 text-primary mt-0.5 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <div>
+                <h3 className="font-medium">Business Address</h3>
+                <p className="text-gray-600 mt-1">Sehgal Mudit & Co.</p>
+                <p className="text-gray-600">BH 421</p>
+                <p className="text-gray-600">Fourth Floor</p>
+                <p className="text-gray-600">Puri Business Hub Sector 81</p>
+                <p className="text-gray-600">Faridabad</p>
               </div>
             </div>
             
@@ -140,7 +155,7 @@ export default function ContactUs() {
         
         {/* Contact Form */}
         <div>
-          <h2 className="text-2xl font-semibold mb-6">Send Us a Message</h2>
+          <h2 className="text-2xl font-semibold mb-6 md:mt-0">Send Us a Message</h2>
           
           {isSubmitted ? (
             <div className="bg-green-50 text-green-800 p-6 rounded-lg">

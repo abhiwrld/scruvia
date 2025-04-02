@@ -28,7 +28,7 @@ export default function GetStarted() {
       ],
       isFree: false,
       cta: "Upgrade to Pro",
-      ctaLink: "/login"
+      ctaLink: "/pricing"
     }
   ];
 
