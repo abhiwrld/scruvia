@@ -99,7 +99,8 @@ export default function ContactUs() {
                 <p className="text-gray-600">BH 421</p>
                 <p className="text-gray-600">Fourth Floor</p>
                 <p className="text-gray-600">Puri Business Hub Sector 81</p>
-                <p className="text-gray-600">Faridabad</p>
+                <p className="text-gray-600">Faridabad, Haryana, India</p>
+                <p className="text-gray-600">Pincode: 121002</p>
               </div>
             </div>
             
