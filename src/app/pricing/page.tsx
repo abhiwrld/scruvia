@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import SuccessMessage from '../components/SuccessMessage';
 import PhoneVerification from '../components/PhoneVerification';
+import { createRazorpayOrder, initializeRazorpayPayment } from '../../utils/razorpay-client';
 
 export default function PricingPage() {
   const [selectedTab, setSelectedTab] = useState('personal');
@@ -17,6 +18,14 @@ export default function PricingPage() {
   const [backButtonText, setBackButtonText] = useState('Back to Chat');
   const [backButtonUrl, setBackButtonUrl] = useState('/chat');
   const router = useRouter();
+  
+  // Define plan prices
+  const planPrices = {
+    free: 0,
+    plus: 499,
+    pro: 1999,
+    team: 2499
+  };
   
   useEffect(() => {
     // Get current plan from localStorage
@@ -55,8 +64,9 @@ export default function PricingPage() {
         return;
       }
       
-      // Check if phone is verified for premium plans
       const userData = JSON.parse(user);
+      
+      // Check if phone is verified for premium plans
       if ((plan === 'pro' || plan === 'team' || plan === 'plus') && !userData.phoneVerified) {
         // Redirect to profile with verification tab if phone not verified
         setLoading(false);
@@ -69,8 +79,71 @@ export default function PricingPage() {
         return;
       }
       
-      // User is logged in and verified (if needed), proceed with upgrade
-      await completeUpgrade(plan);
+      // If downgrading to free plan, no payment needed
+      if (plan === 'free') {
+        await completeUpgrade(plan);
+        return;
+      }
+      
+      // User is logged in and verified (if needed), proceed with payment
+      // Initialize Razorpay payment
+      try {
+        // Create a Razorpay order
+        const amount = planPrices[plan as keyof typeof planPrices];
+        
+        // Calculate GST (18%)
+        const gstAmount = Math.round(amount * 0.18);
+        const totalAmount = amount + gstAmount;
+        
+        console.log(`Plan: ${plan}, Base amount: ${amount}, GST (18%): ${gstAmount}, Total: ${totalAmount}`);
+        
+        const orderData = await createRazorpayOrder(totalAmount, 'INR', plan, userData.id);
+        
+        // Initialize payment
+        await initializeRazorpayPayment(
+          orderData.id,
+          totalAmount,
+          'INR',
+          plan,
+          userData.id,
+          userData.email || '',
+          userData.name || '',
+          userData.phone || '',
+          (data) => {
+            // Payment successful
+            console.log('Payment successful, updating user plan to:', plan);
+            
+            // Update the user data in localStorage with new plan
+            const updatedUserData = {
+              ...userData,
+              plan: plan
+            };
+            
+            // Update both localStorage keys to ensure consistency
+            localStorage.setItem('currentUser', JSON.stringify(updatedUserData));
+            localStorage.setItem('user', JSON.stringify(updatedUserData));
+            
+            // Update state
+            setCurrentPlan(plan);
+            
+            // Complete the upgrade process
+            completeUpgrade(plan);
+            
+            // Redirect to success page
+            router.push(`/payment/success?plan=${plan}&order_id=${data.order_id}&payment_id=${data.payment_id}`);
+          },
+          (error) => {
+            // Payment failed
+            console.error('Payment failed:', error);
+            setLoading(false);
+            alert('Payment failed. Please try again.');
+          }
+        );
+      } catch (error) {
+        console.error('Error initializing payment:', error);
+        setLoading(false);
+        alert('Failed to initialize payment. Please try again.');
+      }
     } catch (err) {
       console.error('Error updating plan:', err);
       setLoading(false);
@@ -81,12 +154,27 @@ export default function PricingPage() {
     setLoading(true);
     
     try {
-      // Update user plan in localStorage
+      console.log('Completing upgrade to plan:', plan);
+      
+      // Update user plan in localStorage (this is redundant with our previous change, but keeps the function self-contained)
       const user = localStorage.getItem('user');
       if (user) {
         const userData = JSON.parse(user);
         userData.plan = plan;
         localStorage.setItem('user', JSON.stringify(userData));
+        
+        // Also update the currentUser entry for consistency
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        
+        // If there's a users collection in localStorage, update that too
+        const users = JSON.parse(localStorage.getItem('users') || '{}');
+        if (users[userData.id]) {
+          users[userData.id] = {
+            ...users[userData.id],
+            plan: plan
+          };
+          localStorage.setItem('users', JSON.stringify(users));
+        }
       }
       
       // Show success message and redirect after it closes
@@ -99,6 +187,10 @@ export default function PricingPage() {
       
       setSuccessMessage(`Successfully upgraded to ${planNames[plan as keyof typeof planNames]} plan! You will be redirected to the chat shortly.`);
       setShowSuccess(true);
+      setLoading(false);
+      
+      // Update local state to reflect the new plan
+      setCurrentPlan(plan);
       
       // Don't redirect immediately, the success message component will handle this
     } catch (err) {
@@ -166,7 +258,7 @@ export default function PricingPage() {
           </p>
           <div className="inline-block bg-gray-800/70 px-4 py-2 rounded-lg border border-gray-700/50 mt-4">
             <p className="text-gray-300 text-sm font-medium">
-              All prices are exclusive of 18% GST
+              All prices below are subject to 18% GST
             </p>
           </div>
         </div>

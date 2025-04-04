@@ -186,8 +186,8 @@ export default function ProfilePage() {
       // Create profile update object
       const profileUpdate = { 
         name: displayName,
-        phone_number: userProfile.phoneNumber || '',
-        phone_verified: phoneVerified
+        phoneNumber: userProfile.phoneNumber || '',
+        phoneVerified: phoneVerified
       };
       
       // Update the profile

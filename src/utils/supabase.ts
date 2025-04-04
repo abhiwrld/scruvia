@@ -195,6 +195,16 @@ function normalizeProfileColumns(profile: any) {
     profile.questions_used = 0; // Default to 0 if neither exists
   }
   
+  // Convert phone_number to phoneNumber for client-side use
+  if (profile.phone_number !== undefined) {
+    profile.phoneNumber = profile.phone_number;
+  }
+  
+  // Convert phone_verified to phoneVerified for client-side use
+  if (profile.phone_verified !== undefined) {
+    profile.phoneVerified = profile.phone_verified;
+  }
+  
   return profile;
 }
 
@@ -292,9 +302,24 @@ async function createDefaultProfile(userId: string) {
 
 export async function updateUserProfile(userId: string, updates: any) {
   try {
+    // Convert camelCase to snake_case for database
+    const dbUpdates: any = { ...updates };
+    
+    // Handle phoneNumber conversion to phone_number
+    if (updates.phoneNumber !== undefined) {
+      dbUpdates.phone_number = updates.phoneNumber;
+      delete dbUpdates.phoneNumber;
+    }
+    
+    // Handle phoneVerified conversion to phone_verified
+    if (updates.phoneVerified !== undefined) {
+      dbUpdates.phone_verified = updates.phoneVerified;
+      delete dbUpdates.phoneVerified;
+    }
+    
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', userId);
 
     if (error) {
