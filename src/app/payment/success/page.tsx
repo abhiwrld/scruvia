@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
-export default function PaymentSuccessPage() {
+// Create a client component that uses search params
+function PaymentSuccessContent() {
   const [countdown, setCountdown] = useState(5);
   const [currentPlan, setCurrentPlan] = useState('');
   const router = useRouter();
@@ -124,5 +125,24 @@ export default function PaymentSuccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading fallback
+function LoadingState() {
+  return (
+    <div className="min-h-screen bg-[#0c1220] flex flex-col items-center justify-center">
+      <div className="w-16 h-16 border-4 border-[#9c6bff]/30 border-t-[#9c6bff] rounded-full animate-spin"></div>
+      <p className="mt-4 text-gray-300">Loading payment details...</p>
+    </div>
+  );
+}
+
+// Main component with Suspense
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 } 
